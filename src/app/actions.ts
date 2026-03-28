@@ -44,8 +44,12 @@ async function parseDateInput(value: FormDataEntryValue | null): Promise<Date | 
     return undefined;
   }
 
-  const profile = await ensureProfileSettings();
-  return fromDateTimeLocalValue(value, profile.timezone);
+  try {
+    const profile = await ensureProfileSettings();
+    return fromDateTimeLocalValue(value, profile.timezone);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function createLifeEntryAction(formData: FormData) {
