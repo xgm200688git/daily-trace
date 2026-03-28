@@ -1,7 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import "dotenv/config";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 
 declare global {
   var __dailyTraceDb: DatabaseClient | undefined;
@@ -10,7 +9,7 @@ declare global {
 type SqlValue = string | number | null;
 
 export interface DatabaseClient {
-  raw: Database.Database;
+  raw: DatabaseSync;
   get<T>(sql: string, params?: SqlValue[]): T | undefined;
   all<T>(sql: string, params?: SqlValue[]): T[];
   run(sql: string, params?: SqlValue[]): void;
@@ -25,33 +24,13 @@ export function resolveDatabasePath(databaseUrl: string): string {
   return resolve(process.cwd(), databaseUrl);
 }
 
-function createSchema(db: Database.Database) {
+function createSchema(db: DatabaseSync) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS password_reset_tokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      token TEXT NOT NULL UNIQUE,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
 
     CREATE TABLE IF NOT EXISTS profile_settings (
       id INTEGER PRIMARY KEY,
-      user_id INTEGER,
       timezone TEXT NOT NULL,
       week_starts_on INTEGER NOT NULL,
       ai_enabled INTEGER NOT NULL DEFAULT 0,
@@ -141,25 +120,7 @@ function createSchema(db: Database.Database) {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE
     );
-  `);
 
-  try {
-    const columns = db.prepare("PRAGMA table_info(profile_settings)").all() as { name: string }[];
-    const hasUserId = columns.some((col) => col.name === "user_id");
-    if (!hasUserId) {
-      db.exec("ALTER TABLE profile_settings ADD COLUMN user_id INTEGER");
-    }
-  } catch (e) {
-    console.log("Could not add user_id column, it may already exist:", e);
-  }
-
-  try {
-    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_settings_user_id ON profile_settings(user_id)");
-  } catch (e) {
-    console.log("Could not create index, it may already exist:", e);
-  }
-
-  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_entries_module_date
       ON entries(profile_id, module, local_date);
     CREATE INDEX IF NOT EXISTS idx_entries_completed_date
@@ -175,7 +136,7 @@ function createSchema(db: Database.Database) {
   `);
 }
 
-function makeClient(db: Database.Database): DatabaseClient {
+function makeClient(db: DatabaseSync): DatabaseClient {
   return {
     raw: db,
     get<T>(sql: string, params: SqlValue[] = []) {
@@ -207,7 +168,7 @@ export function createDatabaseClient(
   const databasePath = resolveDatabasePath(databaseUrl);
   mkdirSync(dirname(databasePath), { recursive: true });
 
-  const sqlite = new Database(databasePath);
+  const sqlite = new DatabaseSync(databasePath);
   createSchema(sqlite);
 
   return makeClient(sqlite);
