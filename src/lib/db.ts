@@ -50,6 +50,33 @@ function createUserSchema(db: DatabaseSync) {
   `);
 }
 
+function addColumnIfNotExists(db: DatabaseSync, tableName: string, columnDefinition: string) {
+  const columnName = columnDefinition.split(' ')[0];
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  const hasColumn = columns.some(col => col.name === columnName);
+  if (!hasColumn) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`);
+  }
+}
+
+function migrateDatabase(db: DatabaseSync) {
+  try {
+    addColumnIfNotExists(db, 'profile_settings', 'deleted_at TEXT');
+    addColumnIfNotExists(db, 'templates', 'deleted_at TEXT');
+    addColumnIfNotExists(db, 'entries', 'deleted_at TEXT');
+    addColumnIfNotExists(db, 'daily_records', 'deleted_at TEXT');
+    addColumnIfNotExists(db, 'daily_records', 'created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
+    addColumnIfNotExists(db, 'weekly_reports', 'deleted_at TEXT');
+    addColumnIfNotExists(db, 'job_runs', 'deleted_at TEXT');
+    addColumnIfNotExists(db, 'change_queue', 'source_hash TEXT NOT NULL DEFAULT \'\'');
+    addColumnIfNotExists(db, 'change_queue', 'retry_count INTEGER NOT NULL DEFAULT 0');
+    addColumnIfNotExists(db, 'change_queue', 'last_retry_at TEXT');
+    addColumnIfNotExists(db, 'change_queue', 'error_message TEXT');
+  } catch (error) {
+    console.warn('Migration encountered an error (some columns may already exist):', error);
+  }
+}
+
 function createSchema(db: DatabaseSync) {
   db.exec(`
     PRAGMA journal_mode = WAL;
@@ -61,6 +88,7 @@ function createSchema(db: DatabaseSync) {
       week_starts_on INTEGER NOT NULL,
       ai_enabled INTEGER NOT NULL DEFAULT 0,
       default_template_id TEXT,
+      deleted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -72,6 +100,7 @@ function createSchema(db: DatabaseSync) {
       version INTEGER NOT NULL DEFAULT 1,
       is_default INTEGER NOT NULL DEFAULT 0,
       definition_json TEXT NOT NULL,
+      deleted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE
@@ -107,6 +136,8 @@ function createSchema(db: DatabaseSync) {
       source_hash TEXT NOT NULL,
       generator_mode TEXT NOT NULL,
       generated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE,
       UNIQUE (profile_id, module, record_date)
@@ -126,7 +157,9 @@ function createSchema(db: DatabaseSync) {
       source_hash TEXT NOT NULL,
       generator_mode TEXT NOT NULL,
       generated_at TEXT NOT NULL,
+      deleted_at TEXT,
       created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE,
       FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL,
       UNIQUE (profile_id, week_start, revision)
@@ -142,9 +175,34 @@ function createSchema(db: DatabaseSync) {
       last_error TEXT,
       started_at TEXT NOT NULL,
       finished_at TEXT,
+      deleted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_status (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      last_sync_at TEXT,
+      sync_status TEXT NOT NULL DEFAULT 'pending',
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS change_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      change_data TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      source_hash TEXT NOT NULL,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      last_retry_at TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_entries_module_date
@@ -159,7 +217,47 @@ function createSchema(db: DatabaseSync) {
       ON templates(profile_id, is_default);
     CREATE INDEX IF NOT EXISTS idx_job_runs_type
       ON job_runs(profile_id, type, updated_at);
+
+    CREATE INDEX IF NOT EXISTS idx_profile_settings_updated_at
+      ON profile_settings(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_templates_updated_at
+      ON templates(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_entries_updated_at
+      ON entries(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_daily_records_updated_at
+      ON daily_records(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_weekly_reports_updated_at
+      ON weekly_reports(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_job_runs_updated_at
+      ON job_runs(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_sync_status_updated_at
+      ON sync_status(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_change_queue_status
+      ON change_queue(status, created_at);
+
+    CREATE TABLE IF NOT EXISTS conflict_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      conflict_type TEXT NOT NULL,
+      local_updated_at TEXT,
+      cloud_updated_at TEXT,
+      local_source_hash TEXT,
+      cloud_source_hash TEXT,
+      resolved_strategy TEXT NOT NULL,
+      winner_source TEXT NOT NULL,
+      local_data TEXT,
+      cloud_data TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_conflict_history_table_record
+      ON conflict_history(table_name, record_id);
+    CREATE INDEX IF NOT EXISTS idx_conflict_history_created_at
+      ON conflict_history(created_at);
   `);
+
+  migrateDatabase(db);
 }
 
 function makeClient(db: DatabaseSync): DatabaseClient {
@@ -196,6 +294,7 @@ export function createDatabaseClient(
 
   const sqlite = new DatabaseSync(databasePath);
   createSchema(sqlite);
+  migrateDatabase(sqlite);
 
   return makeClient(sqlite);
 }

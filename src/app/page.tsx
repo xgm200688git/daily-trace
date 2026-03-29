@@ -13,6 +13,7 @@ import {
 import { CopyButton } from "@/components/copy-button";
 import { StatusBanner } from "@/components/status-banner";
 import { TabNav } from "@/components/tab-nav";
+import { SyncStatus } from "@/components/SyncStatus";
 import { getDashboardData } from "@/features/dashboard/service";
 import { parseWeeklySections } from "@/features/reports/service";
 import { reconcileOnAppOpen } from "@/features/reconcile/service";
@@ -25,7 +26,8 @@ import {
   toDateTimeLocalValue,
   weekEndFromStartKey,
 } from "@/lib/time";
-import { requireCurrentUserDbClient } from "@/lib/auth";
+import { getCurrentUserDbClient } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +85,11 @@ export default async function Home({
   const resolvedSearchParams = await searchParams;
   const currentTab = getTab(resolvedSearchParams.tab);
   let reconcileMessage: string | undefined;
-  const client = await requireCurrentUserDbClient();
+  const client = await getCurrentUserDbClient();
+  
+  if (!client) {
+    redirect("/login");
+  }
 
   try {
     await reconcileOnAppOpen(client);
@@ -482,6 +488,7 @@ export default async function Home({
             </div>
 
             <div className="space-y-6">
+              <SyncStatus />
               <div className="rounded-[2rem] border border-black/6 bg-white/72 px-6 py-6">
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-stone-400">生成设置</p>

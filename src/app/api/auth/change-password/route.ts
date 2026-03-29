@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getUserById, updateUserPassword, verifyPassword } from "@/features/auth/user-service";
+import { updateUserPassword, verifyPassword, getUserById } from "@/features/auth/user-service";
 import { getSession, getSessionCookieName } from "@/lib/session";
+
+export const dynamic = 'force-dynamic';
 
 const ChangePasswordSchema = z.object({
   currentPassword: z.string(),

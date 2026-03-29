@@ -17,6 +17,7 @@
     "cron:weekly": "node --env-file=.env --import tsx scripts/cron-weekly.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.100.1",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",

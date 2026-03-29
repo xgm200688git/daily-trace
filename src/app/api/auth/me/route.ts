@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getUserById } from "@/features/auth/user-service";
 import { getSession, getSessionCookieName } from "@/lib/session";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const cookieName = getSessionCookieName();
   const sessionId = request.cookies.get(cookieName)?.value;

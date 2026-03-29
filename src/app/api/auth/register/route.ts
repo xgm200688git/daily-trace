@@ -3,6 +3,8 @@ import { z } from "zod";
 import { createUser, getUserByEmail } from "@/features/auth/user-service";
 import { createSession, getSessionCookieName, getSessionExpiresDays } from "@/lib/session";
 
+export const dynamic = 'force-dynamic';
+
 const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),

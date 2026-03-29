@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { deleteSession, getSessionCookieName } from "@/lib/session";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   const cookieName = getSessionCookieName();
   const sessionId = request.cookies.get(cookieName)?.value;
