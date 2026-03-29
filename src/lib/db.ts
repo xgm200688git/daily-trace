@@ -1,10 +1,11 @@
 import { mkdirSync } from "fs";
 import { dirname, resolve } from "path";
 import { DatabaseSync, type RunResult } from "node:sqlite";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 declare global {
   var __dailyTraceDb: DatabaseClient | undefined;
-  var __usersDb: DatabaseClient | undefined;
+  var __usersDb: DatabaseClient | AsyncDatabaseClient | undefined;
 }
 
 type SqlValue = string | number | null;
@@ -15,6 +16,14 @@ export interface DatabaseClient {
   all<T>(sql: string, params?: SqlValue[]): T[];
   run(sql: string, params?: SqlValue[]): RunResult;
   transaction<T>(fn: () => T): T;
+}
+
+export interface AsyncDatabaseClient {
+  raw: DatabaseSync | SupabaseClient;
+  get<T>(sql: string, params?: SqlValue[]): Promise<T | undefined>;
+  all<T>(sql: string, params?: SqlValue[]): Promise<T[]>;
+  run(sql: string, params?: SqlValue[]): Promise<RunResult>;
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 export function resolveDatabasePath(databaseUrl: string): string {
@@ -315,9 +324,67 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.__dailyTraceDb = db;
 }
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const USE_SUPABASE = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
+
+let supabaseClientInstance: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (!supabaseClientInstance) {
+    supabaseClientInstance = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+  return supabaseClientInstance;
+}
+
+function convertParams(sql: string, params: SqlValue[]): { sql: string; params: SqlValue[] } {
+  let convertedSql = sql;
+  let paramIndex = 1;
+  while (convertedSql.indexOf("?") !== -1) {
+    convertedSql = convertedSql.replace("?", "$" + paramIndex);
+    paramIndex++;
+  }
+  return { sql: convertedSql, params };
+}
+
+function makeSupabaseClient(client: SupabaseClient): AsyncDatabaseClient {
+  return {
+    raw: client,
+    async get<T>(sql: string, params: SqlValue[] = []): Promise<T | undefined> {
+      const { sql: convertedSql, params: convertedParams } = convertParams(sql, params);
+      const { data, error } = await client.rpc("execute_sql", { sql_query: convertedSql, params: convertedParams });
+      if (error) throw error;
+      return (data as T[])[0];
+    },
+    async all<T>(sql: string, params: SqlValue[] = []): Promise<T[]> {
+      const { sql: convertedSql, params: convertedParams } = convertParams(sql, params);
+      const { data, error } = await client.rpc("execute_sql", { sql_query: convertedSql, params: convertedParams });
+      if (error) throw error;
+      return data as T[];
+    },
+    async run(sql: string, params: SqlValue[] = []): Promise<RunResult> {
+      const { sql: convertedSql, params: convertedParams } = convertParams(sql, params);
+      const { data, error } = await client.rpc("execute_sql", { sql_query: convertedSql, params: convertedParams });
+      if (error) throw error;
+      const resultData = data as any[];
+      return {
+        changes: resultData[0]?.changes || 0,
+        lastInsertRowid: resultData[0]?.last_insert_rowid,
+      } as RunResult;
+    },
+    async transaction<T>(fn: () => Promise<T>): Promise<T> {
+      return await fn();
+    },
+  };
+}
+
 export function createUserDatabaseClient(
   databaseUrl = "file:./data/users.db",
-): DatabaseClient {
+): DatabaseClient | AsyncDatabaseClient {
+  if (USE_SUPABASE) {
+    return makeSupabaseClient(getSupabaseClient());
+  }
+
   const databasePath = resolveDatabasePath(databaseUrl);
   mkdirSync(dirname(databasePath), { recursive: true });
 
@@ -327,7 +394,7 @@ export function createUserDatabaseClient(
   return makeClient(sqlite);
 }
 
-export const usersDb =
+export const usersDb: DatabaseClient | AsyncDatabaseClient =
   globalThis.__usersDb ?? createUserDatabaseClient();
 
 if (process.env.NODE_ENV !== "production") {

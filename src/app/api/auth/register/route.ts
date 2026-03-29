@@ -15,13 +15,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = RegisterSchema.parse(body);
 
-    const existingUser = getUserByEmail(data.email);
+    const existingUser = await getUserByEmail(data.email);
     if (existingUser) {
       return NextResponse.json({ ok: false, error: "Email already exists" }, { status: 400 });
     }
 
     const user = await createUser(data.email, data.password);
-    const session = createSession(user.id);
+    const session = await createSession(user.id);
 
     const response = NextResponse.json({
       ok: true,

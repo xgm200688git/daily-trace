@@ -31,12 +31,12 @@ function fromDbRow(row: {
   };
 }
 
-export function createSession(userId: number): Session {
+export async function createSession(userId: number): Promise<Session> {
   const sessionId = generateSessionId();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_EXPIRES_DAYS * 24 * 60 * 60 * 1000);
 
-  usersDb.run(
+  await usersDb.run(
     "INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
     [sessionId, userId, expiresAt.toISOString(), nowIso()],
   );
@@ -49,8 +49,8 @@ export function createSession(userId: number): Session {
   };
 }
 
-export function getSession(sessionId: string): Session | undefined {
-  const row = usersDb.get<{
+export async function getSession(sessionId: string): Promise<Session | undefined> {
+  const row = await usersDb.get<{
     id: string;
     user_id: number;
     expires_at: string;
@@ -67,12 +67,12 @@ export function getSession(sessionId: string): Session | undefined {
   return fromDbRow(row);
 }
 
-export function deleteSession(sessionId: string): void {
-  usersDb.run("DELETE FROM sessions WHERE id = ?", [sessionId]);
+export async function deleteSession(sessionId: string): Promise<void> {
+  await usersDb.run("DELETE FROM sessions WHERE id = ?", [sessionId]);
 }
 
-export function deleteExpiredSessions(): void {
-  usersDb.run("DELETE FROM sessions WHERE expires_at <= ?", [nowIso()]);
+export async function deleteExpiredSessions(): Promise<void> {
+  await usersDb.run("DELETE FROM sessions WHERE expires_at <= ?", [nowIso()]);
 }
 
 export function getSessionCookieName(): string {
@@ -83,13 +83,13 @@ export function getSessionExpiresDays(): number {
   return SESSION_EXPIRES_DAYS;
 }
 
-export function getSessionUser(sessionId: string): User | undefined {
-  const session = getSession(sessionId);
+export async function getSessionUser(sessionId: string): Promise<User | undefined> {
+  const session = await getSession(sessionId);
   if (!session) {
     return undefined;
   }
 
-  const row = usersDb.get<{
+  const row = await usersDb.get<{
     id: number;
     email: string;
     password_hash: string;

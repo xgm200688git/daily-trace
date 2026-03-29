@@ -24,12 +24,12 @@ export async function createUser(email: string, password: string): Promise<User>
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const now = nowIso();
 
-  const result = usersDb.run(
+  const result = await usersDb.run(
     "INSERT INTO users (email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?)",
     [email, passwordHash, now, now],
   );
 
-  const user = usersDb.get<{
+  const user = await usersDb.get<{
     id: number;
     email: string;
     password_hash: string;
@@ -47,8 +47,8 @@ export async function createUser(email: string, password: string): Promise<User>
   return fromDbRow(user);
 }
 
-export function getUserByEmail(email: string): User | undefined {
-  const row = usersDb.get<{
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  const row = await usersDb.get<{
     id: number;
     email: string;
     password_hash: string;
@@ -66,8 +66,8 @@ export function getUserByEmail(email: string): User | undefined {
   return fromDbRow(row);
 }
 
-export function getUserById(id: number): User | undefined {
-  const row = usersDb.get<{
+export async function getUserById(id: number): Promise<User | undefined> {
+  const row = await usersDb.get<{
     id: number;
     email: string;
     password_hash: string;
@@ -89,12 +89,12 @@ export async function updateUserPassword(userId: number, newPassword: string): P
   const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
   const now = nowIso();
 
-  usersDb.run(
+  await usersDb.run(
     "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
     [passwordHash, now, userId],
   );
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
 
   if (!user) {
     throw new Error("User not found");

@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = LoginSchema.parse(body);
 
-    const user = getUserByEmail(data.email);
+    const user = await getUserByEmail(data.email);
     if (!user) {
       return NextResponse.json({ ok: false, error: "Invalid credentials" }, { status: 401 });
     }
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Invalid credentials" }, { status: 401 });
     }
 
-    const session = createSession(user.id);
+    const session = await createSession(user.id);
 
     const response = NextResponse.json({
       ok: true,

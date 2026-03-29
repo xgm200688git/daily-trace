@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const session = getSession(sessionId);
+    const session = await getSession(sessionId);
     if (!session) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = ChangePasswordSchema.parse(body);
 
-    const user = getUserById(session.userId);
+    const user = await getUserById(session.userId);
     if (!user) {
       return NextResponse.json({ ok: false, error: "User not found" }, { status: 404 });
     }

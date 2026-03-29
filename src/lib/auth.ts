@@ -10,7 +10,7 @@ export async function getCurrentUserId(): Promise<number | null> {
     return null;
   }
 
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session) {
     return null;
   }
