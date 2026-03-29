@@ -1,24 +1,20 @@
 import { type NextRequest } from "next/server";
 import { getSession, getSessionCookieName } from "@/lib/session";
+import {
+  registerConnection,
+  unregisterConnection,
+  broadcastToUser,
+  broadcast,
+  getActiveConnectionCount,
+  getUserConnectionCount,
+} from "@/lib/sse-broadcast";
 
 export const dynamic = 'force-dynamic';
 
-interface SSEEventData {
-  [key: string]: unknown;
-}
-
 interface SSEEvent {
   type: string;
-  data: SSEEventData;
+  data: { [key: string]: unknown };
 }
-
-interface ActiveConnection {
-  controller: ReadableStreamDefaultController;
-  userId: number;
-  createdAt: string;
-}
-
-const activeConnections = new Map<string, ActiveConnection>();
 
 function generateConnectionId(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -58,11 +54,7 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
-      activeConnections.set(connectionId, {
-        controller,
-        userId: session.userId,
-        createdAt: new Date().toISOString(),
-      });
+      registerConnection(connectionId, controller, session.userId);
 
       controller.enqueue(new TextEncoder().encode(formatSSE({
         type: "connected",
@@ -77,7 +69,7 @@ export async function GET(request: NextRequest) {
       if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
       }
-      activeConnections.delete(connectionId);
+      unregisterConnection(connectionId);
     }
   });
 
@@ -91,33 +83,4 @@ export async function GET(request: NextRequest) {
   });
 }
 
-function broadcastToUser(userId: number, event: SSEEvent) {
-  const connections = Array.from(activeConnections.values());
-  const userConnections = connections.filter(conn => conn.userId === userId);
-  
-  for (const conn of userConnections) {
-    try {
-      conn.controller.enqueue(new TextEncoder().encode(formatSSE(event)));
-    } catch {
-    }
-  }
-}
 
-function broadcast(event: SSEEvent) {
-  const connections = Array.from(activeConnections.values());
-  
-  for (const conn of connections) {
-    try {
-      conn.controller.enqueue(new TextEncoder().encode(formatSSE(event)));
-    } catch {
-    }
-  }
-}
-
-function getActiveConnectionCount(): number {
-  return activeConnections.size;
-}
-
-function getUserConnectionCount(userId: number): number {
-  return Array.from(activeConnections.values()).filter(conn => conn.userId === userId).length;
-}
