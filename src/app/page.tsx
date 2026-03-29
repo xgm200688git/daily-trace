@@ -107,37 +107,37 @@ export default async function Home({
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-28 pt-6 md:px-8 md:pb-12">
-      <header className="grid gap-6 rounded-[2rem] border border-black/6 bg-white/82 px-6 py-6 shadow-[0_24px_80px_rgba(31,20,10,0.06)] backdrop-blur md:grid-cols-[1.4fr_1fr] md:px-8">
+      <header className="grid gap-6 rounded-[2.5rem] border border-white/30 bg-white/70 px-6 py-6 shadow-xl shadow-violet-500/10 backdrop-blur-xl md:grid-cols-[1.4fr_1fr] md:px-8">
         <div className="space-y-4">
-          <p className="text-sm font-medium uppercase tracking-[0.18em] text-stone-400">
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-violet-500">
             {chineseDateLabel(data.today)}
           </p>
           <div className="space-y-3">
-            <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-stone-950 md:text-5xl">
+            <h1 className="max-w-3xl text-4xl font-bold tracking-tight bg-gradient-to-r from-violet-600 via-cyan-500 to-pink-500 bg-clip-text text-transparent md:text-5xl">
               每日轨迹
             </h1>
-            <p className="max-w-2xl text-base leading-7 text-stone-600">
+            <p className="max-w-2xl text-base leading-7 text-slate-600">
               把生活碎片、工作任务和每周复盘都放进一个安静的工作台里。你只负责记录，
               应用负责在后台把它们整理成日报和周报。
             </p>
           </div>
         </div>
-        <div className="grid gap-3 rounded-[1.6rem] border border-black/5 bg-stone-950 px-5 py-5 text-stone-100">
-          <div className="flex items-center justify-between text-sm text-stone-300">
+        <div className="grid gap-3 rounded-[2rem] border border-white/20 bg-gradient-to-br from-violet-600 via-cyan-500 to-pink-500 px-5 py-5 text-white shadow-xl shadow-violet-500/30">
+          <div className="flex items-center justify-between text-sm text-white/80">
             <span>当前时区</span>
             <span className="font-mono text-xs">{data.profile.timezone}</span>
           </div>
-          <div className="flex items-center justify-between text-sm text-stone-300">
+          <div className="flex items-center justify-between text-sm text-white/80">
             <span>今日生活记录</span>
-            <span>{data.lifeEntries.length} 条</span>
+            <span className="font-semibold">{data.lifeEntries.length} 条</span>
           </div>
-          <div className="flex items-center justify-between text-sm text-stone-300">
+          <div className="flex items-center justify-between text-sm text-white/80">
             <span>未完成任务</span>
-            <span>{data.pendingWorkTasks.length} 项</span>
+            <span className="font-semibold">{data.pendingWorkTasks.length} 项</span>
           </div>
-          <div className="flex items-center justify-between text-sm text-stone-300">
+          <div className="flex items-center justify-between text-sm text-white/80">
             <span>默认模板</span>
-            <span>{data.templates.find((item) => item.isDefault)?.name ?? "未设置"}</span>
+            <span className="font-semibold">{data.templates.find((item) => item.isDefault)?.name ?? "未设置"}</span>
           </div>
         </div>
       </header>
@@ -150,10 +150,10 @@ export default async function Home({
 
         {currentTab === "life" && (
           <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-4 rounded-[2rem] border border-black/6 bg-white/86 px-6 py-6 shadow-[0_18px_60px_rgba(31,20,10,0.05)]">
+            <div className="space-y-4 rounded-[2.5rem] border border-white/30 bg-white/70 px-6 py-6 shadow-xl shadow-violet-500/10 backdrop-blur-xl transition-all duration-300 hover:shadow-2xl hover:shadow-violet-500/20">
               <div className="space-y-2">
-                <p className="text-sm font-medium text-stone-400">生活</p>
-                <h2 className="text-2xl font-semibold text-stone-950">
+                <p className="text-sm font-medium text-violet-500">生活</p>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-cyan-500 bg-clip-text text-transparent">
                   今天发生了什么？
                 </h2>
               </div>
@@ -163,35 +163,35 @@ export default async function Home({
                   rows={5}
                   required
                   placeholder="写下今天的片段、情绪或一句话。"
-                  className="w-full rounded-[1.5rem] border border-black/8 bg-stone-50 px-4 py-4 text-base text-stone-900 outline-none transition focus:border-stone-300"
+                  className="w-full rounded-[1.5rem] border border-violet-200 bg-violet-50/50 px-4 py-4 text-base text-slate-800 outline-none transition-all duration-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-300/50 hover:border-violet-300"
                 />
                 <div className="grid gap-3 md:grid-cols-3">
                   <input
                     name="mood"
                     placeholder="心情，例如：平静 / 开心"
-                    className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                    className="rounded-full border border-violet-200 bg-white/80 px-4 py-3 text-sm text-slate-700 outline-none transition-all duration-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-300/50 hover:border-violet-300"
                   />
                   <input
                     name="tags"
                     placeholder="标签，逗号分隔"
-                    className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                    className="rounded-full border border-violet-200 bg-white/80 px-4 py-3 text-sm text-slate-700 outline-none transition-all duration-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-300/50 hover:border-violet-300"
                   />
                   <input
                     name="occurredAt"
                     type="datetime-local"
-                    className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                    className="rounded-full border border-violet-200 bg-white/80 px-4 py-3 text-sm text-slate-700 outline-none transition-all duration-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-300/50 hover:border-violet-300"
                   />
                 </div>
-                <button className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800">
+                <button className="inline-flex w-fit items-center rounded-full bg-gradient-to-r from-violet-600 to-cyan-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-violet-500/40 hover:scale-105 active:scale-95">
                   保存生活记录
                 </button>
               </form>
             </div>
 
-            <div className="space-y-4 rounded-[2rem] border border-black/6 bg-white/70 px-6 py-6">
+            <div className="space-y-4 rounded-[2.5rem] border border-white/30 bg-white/70 px-6 py-6 shadow-xl shadow-cyan-500/10 backdrop-blur-xl transition-all duration-300 hover:shadow-2xl">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-stone-400">今日时间线</p>
-                <h3 className="text-xl font-semibold text-stone-950">
+                <p className="text-sm font-medium text-cyan-500">今日时间线</p>
+                <h3 className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-violet-500 bg-clip-text text-transparent">
                   已记录 {data.lifeEntries.length} 条
                 </h3>
               </div>
