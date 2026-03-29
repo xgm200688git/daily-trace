@@ -7,6 +7,9 @@
 -- This function allows executing SQL queries with parameters
 -- It's used by the application to interact with the database
 
+-- Drop the function first if it exists (to avoid return type conflict)
+DROP FUNCTION IF EXISTS execute_sql(text, jsonb);
+
 CREATE OR REPLACE FUNCTION execute_sql(
   sql_query TEXT,
   params JSONB DEFAULT '[]'::jsonb
