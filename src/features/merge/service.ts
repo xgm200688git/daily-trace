@@ -267,8 +267,9 @@ export async function generateDailyRecord(
           source_hash,
           generator_mode,
           generated_at,
+          created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -280,6 +281,7 @@ export async function generateDailyRecord(
         toJsonString(entries.map((entry) => entry.id)),
         inputHash,
         aiSummary ? GENERATOR_MODE.AI : GENERATOR_MODE.RULE,
+        now,
         now,
         now,
       ],
@@ -338,8 +340,9 @@ export async function generateDailyRecord(
         source_hash,
         generator_mode,
         generated_at,
+        created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       id,
@@ -351,6 +354,7 @@ export async function generateDailyRecord(
       toJsonString(entries.map((entry) => entry.id)),
       inputHash,
       GENERATOR_MODE.RULE,
+      now,
       now,
       now,
     ],

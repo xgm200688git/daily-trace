@@ -444,8 +444,9 @@ export async function generateWeeklyReportForWeek(
           source_hash,
           generator_mode,
           generated_at,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -460,6 +461,7 @@ export async function generateWeeklyReportForWeek(
         toJsonString(dailyRecords.map((record) => record.id)),
         inputHash,
         generatorMode,
+        now,
         now,
         now,
       ],
