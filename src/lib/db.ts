@@ -1,9 +1,10 @@
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { mkdirSync } from "fs";
+import { dirname, resolve } from "path";
+import { DatabaseSync, type RunResult } from "node:sqlite";
 
 declare global {
   var __dailyTraceDb: DatabaseClient | undefined;
+  var __usersDb: DatabaseClient | undefined;
 }
 
 type SqlValue = string | number | null;
@@ -12,7 +13,7 @@ export interface DatabaseClient {
   raw: DatabaseSync;
   get<T>(sql: string, params?: SqlValue[]): T | undefined;
   all<T>(sql: string, params?: SqlValue[]): T[];
-  run(sql: string, params?: SqlValue[]): void;
+  run(sql: string, params?: SqlValue[]): RunResult;
   transaction<T>(fn: () => T): T;
 }
 
@@ -22,6 +23,31 @@ export function resolveDatabasePath(databaseUrl: string): string {
   }
 
   return resolve(process.cwd(), databaseUrl);
+}
+
+function createUserSchema(db: DatabaseSync) {
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA foreign_keys = ON;
+
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+  `);
 }
 
 function createSchema(db: DatabaseSync) {
@@ -146,7 +172,7 @@ function makeClient(db: DatabaseSync): DatabaseClient {
       return db.prepare(sql).all(...params) as T[];
     },
     run(sql: string, params: SqlValue[] = []) {
-      db.prepare(sql).run(...params);
+      return db.prepare(sql).run(...params);
     },
     transaction<T>(fn: () => T) {
       db.exec("BEGIN");
@@ -181,6 +207,30 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.__dailyTraceDb = db;
 }
 
+export function createUserDatabaseClient(
+  databaseUrl = "file:./data/users.db",
+): DatabaseClient {
+  const databasePath = resolveDatabasePath(databaseUrl);
+  mkdirSync(dirname(databasePath), { recursive: true });
+
+  const sqlite = new DatabaseSync(databasePath);
+  createUserSchema(sqlite);
+
+  return makeClient(sqlite);
+}
+
+export const usersDb =
+  globalThis.__usersDb ?? createUserDatabaseClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalThis.__usersDb = usersDb;
+}
+
+export function getUserDatabaseClient(userId: number): DatabaseClient {
+  const databaseUrl = `file:./data/users/${userId}/daily-trace.db`;
+  return createDatabaseClient(databaseUrl);
+}
+
 export function fromDbBoolean(value: number | null | undefined): boolean {
   return value === 1;
 }
@@ -191,4 +241,16 @@ export function toDbBoolean(value: boolean): number {
 
 export function nowIso(): string {
   return new Date().toISOString();
+}
+
+const userDbCache = new Map<number, DatabaseClient>();
+
+export function getCurrentUserDb(userId: number): DatabaseClient {
+  if (userDbCache.has(userId)) {
+    return userDbCache.get(userId)!;
+  }
+
+  const db = getUserDatabaseClient(userId);
+  userDbCache.set(userId, db);
+  return db;
 }

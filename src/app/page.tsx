@@ -25,6 +25,7 @@ import {
   toDateTimeLocalValue,
   weekEndFromStartKey,
 } from "@/lib/time";
+import { requireCurrentUserDbClient } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -82,14 +83,15 @@ export default async function Home({
   const resolvedSearchParams = await searchParams;
   const currentTab = getTab(resolvedSearchParams.tab);
   let reconcileMessage: string | undefined;
+  const client = await requireCurrentUserDbClient();
 
   try {
-    await reconcileOnAppOpen();
+    await reconcileOnAppOpen(client);
   } catch {
     reconcileMessage = "应用启动补偿失败，当前展示的可能不是最新合并结果。";
   }
 
-  const data = await getDashboardData();
+  const data = await getDashboardData(client);
   const lifeRecord = getDailyRecordContent(data.dailyRecords, ENTRY_MODULE.LIFE);
   const workRecord = getDailyRecordContent(data.dailyRecords, ENTRY_MODULE.WORK);
   const currentWeekEnd = weekEndFromStartKey(data.currentWeekStart);
