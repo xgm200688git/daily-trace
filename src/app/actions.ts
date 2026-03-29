@@ -12,6 +12,7 @@ import {
   toggleWorkTaskStatus,
   updateLifeEntry,
   updateWorkTask,
+  type EntryRecord,
 } from "@/features/diary/service";
 import { generateDailyRecord } from "@/features/merge/service";
 import { generateWeeklyReportForWeek } from "@/features/reports/service";
@@ -23,7 +24,9 @@ import {
   toLocalWeekStartKey,
   weekStartFromDateKey,
 } from "@/lib/time";
-import { requireCurrentUserDbClient } from "@/lib/auth";
+import { requireCurrentUserDbClient, getCurrentUserId } from "@/lib/auth";
+import { getCloudSyncManager } from "@/lib/cloud-sync";
+import { broadcastToUser } from "@/lib/sse-broadcast";
 
 function withStatus(tab: string, message: string, tone: "success" | "error") {
   const params = new URLSearchParams({
@@ -33,6 +36,29 @@ function withStatus(tab: string, message: string, tone: "success" | "error") {
   });
 
   return `/?${params.toString()}`;
+}
+
+async function enqueueSyncAndBroadcast(
+  tableName: string,
+  recordId: string,
+  operation: "insert" | "update" | "delete",
+  changeData?: Record<string, unknown>
+) {
+  const userId = await getCurrentUserId();
+  const syncManager = getCloudSyncManager();
+  await syncManager.enqueueChange(tableName, recordId, operation, changeData);
+  
+  if (userId) {
+    broadcastToUser(userId, {
+      type: "change",
+      data: {
+        tableName,
+        recordId,
+        operation,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
 }
 
 async function resolveWeekStart(dateKey: string, client: import("@/lib/db").DatabaseClient) {
@@ -72,6 +98,8 @@ export async function createLifeEntryAction(formData: FormData) {
   );
   await generateDailyRecord(entry.localDate, "life", client);
 
+  await enqueueSyncAndBroadcast("entries", entry.id, "insert", entry as unknown as Record<string, unknown>);
+
   revalidatePath("/");
   redirect(withStatus("life", "生活记录已保存。", "success"));
 }
@@ -97,6 +125,8 @@ export async function updateLifeEntryAction(formData: FormData) {
   );
   await generateDailyRecord(entry.localDate, "life", client);
 
+  await enqueueSyncAndBroadcast("entries", entry.id, "update", entry as unknown as Record<string, unknown>);
+
   revalidatePath("/");
   redirect(withStatus("life", "生活记录已更新。", "success"));
 }
@@ -109,13 +139,15 @@ export async function createWorkTaskAction(formData: FormData) {
     redirect(withStatus("work", "任务标题不能为空。", "error"));
   }
 
-  await createWorkTask(
+  const task = await createWorkTask(
     {
       title,
       description: String(formData.get("description") || "").trim() || undefined,
     },
     client,
   );
+
+  await enqueueSyncAndBroadcast("entries", task.id, "insert", task as unknown as Record<string, unknown>);
 
   revalidatePath("/");
   redirect(withStatus("work", "工作任务已创建。", "success"));
@@ -143,6 +175,8 @@ export async function updateWorkTaskAction(formData: FormData) {
     await generateDailyRecord(task.completedLocalDate, "work", client);
     await generateWeeklyReportForWeek(await resolveWeekStart(task.completedLocalDate, client), {}, client);
   }
+
+  await enqueueSyncAndBroadcast("entries", task.id, "update", task as unknown as Record<string, unknown>);
 
   revalidatePath("/");
   redirect(withStatus("work", "任务已更新。", "success"));
@@ -172,6 +206,8 @@ export async function toggleWorkTaskStatusAction(formData: FormData) {
     await generateWeeklyReportForWeek(await resolveWeekStart(date, client), {}, client);
   }
 
+  await enqueueSyncAndBroadcast("entries", updated.id, "update", updated as unknown as Record<string, unknown>);
+
   revalidatePath("/");
   redirect(withStatus("work", "任务状态已更新。", "success"));
 }
@@ -197,6 +233,8 @@ export async function deleteEntryAction(formData: FormData) {
     await generateDailyRecord(affectedDate, "work", client);
     await generateWeeklyReportForWeek(await resolveWeekStart(affectedDate, client), {}, client);
   }
+
+  await enqueueSyncAndBroadcast("entries", entryId, "delete");
 
   revalidatePath("/");
   redirect(withStatus(tab, "记录已删除。", "success"));
@@ -224,18 +262,22 @@ export async function generateCurrentWeekReportAction(formData: FormData) {
 export async function saveTemplateAction(formData: FormData) {
   const client = await requireCurrentUserDbClient();
   const rawJson = String(formData.get("definitionJson") || "").trim();
+  const templateId = String(formData.get("templateId") || "").trim() || undefined;
 
   if (!rawJson) {
     redirect(withStatus("reports", "模板 JSON 不能为空。", "error"));
   }
 
   try {
-    await saveTemplateFromRawJson(
+    const template = await saveTemplateFromRawJson(
       rawJson,
       String(formData.get("name") || "").trim() || undefined,
-      String(formData.get("templateId") || "").trim() || undefined,
+      templateId,
       client,
     );
+
+    const operation = templateId ? "update" : "insert";
+    await enqueueSyncAndBroadcast("templates", template.id, operation, template as unknown as Record<string, unknown>);
   } catch (error) {
     redirect(
       withStatus(
@@ -259,6 +301,15 @@ export async function setDefaultTemplateAction(formData: FormData) {
   }
 
   await setDefaultTemplate(templateId, client);
+  
+  const template = await client.get<{ id: string; updated_at: string }>(
+    "SELECT id, updated_at FROM templates WHERE id = ?",
+    [templateId]
+  );
+  if (template) {
+    await enqueueSyncAndBroadcast("templates", templateId, "update", template as unknown as Record<string, unknown>);
+  }
+
   revalidatePath("/");
   redirect(withStatus("reports", "默认模板已切换。", "success"));
 }
@@ -266,6 +317,15 @@ export async function setDefaultTemplateAction(formData: FormData) {
 export async function toggleAiAction(formData: FormData) {
   const client = await requireCurrentUserDbClient();
   await setAiEnabled(formData.get("aiEnabled") === "on", client);
+  
+  const profile = await client.get<{ id: number; updated_at: string }>(
+    "SELECT id, updated_at FROM profile_settings WHERE id = ?",
+    [1]
+  );
+  if (profile) {
+    await enqueueSyncAndBroadcast("profile_settings", String(profile.id), "update", profile as unknown as Record<string, unknown>);
+  }
+
   revalidatePath("/");
   redirect(withStatus("reports", "AI 设置已更新。", "success"));
 }
