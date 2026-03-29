@@ -135,11 +135,50 @@ A: 当然可以！在配置时选择 `main` 分支即可
 
 ---
 
+---
+
+## 🔧 配置 Supabase 实现数据持久化（推荐）
+
+要在 Vercel 上实现数据持久化，建议使用 Supabase：
+
+### 第一步：创建 Supabase 项目
+
+1. 访问 https://supabase.com 并注册/登录
+2. 点击 "New Project" 创建新项目
+3. 填写项目信息并等待项目创建完成
+
+### 第二步：获取 Supabase 凭证
+
+1. 在 Supabase 项目中，进入 **Settings** → **API**
+2. 复制以下信息：
+   - `Project URL`（例如：`https://xxxxx.supabase.co`）
+   - `anon public` API Key
+
+### 第三步：在 Vercel 中配置环境变量
+
+1. 在 Vercel Dashboard 中，进入您的项目设置
+2. 找到 **Environment Variables** 部分
+3. 添加以下环境变量：
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+4. 重新部署项目
+
+### 第四步：设置 Supabase 数据库schema
+
+项目包含 Supabase 集成，您需要在 Supabase 中创建相应的数据库表。请参考项目代码中的 schema 定义。
+
+---
+
 ## 📞 需要帮助？
 
 如果遇到问题，请检查：
 1. GitHub 仓库连接是否正常
 2. 分支选择是否正确（`feature/auto-deploy`）
 3. 构建命令是否正确（`npm run build`）
+4. 数据库路径配置（已更新为使用 /tmp 目录）
 
 祝您部署顺利！🎉🚀
