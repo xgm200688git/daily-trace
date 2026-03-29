@@ -18,10 +18,19 @@ export interface DatabaseClient {
 }
 
 export function resolveDatabasePath(databaseUrl: string): string {
+  const isVercel = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
+  
   if (databaseUrl.startsWith("file:")) {
-    return resolve(process.cwd(), databaseUrl.slice(5));
+    const path = databaseUrl.slice(5);
+    if (isVercel) {
+      return resolve("/tmp", path);
+    }
+    return resolve(process.cwd(), path);
   }
 
+  if (isVercel) {
+    return resolve("/tmp", databaseUrl);
+  }
   return resolve(process.cwd(), databaseUrl);
 }
 
