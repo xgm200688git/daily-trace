@@ -1,6 +1,6 @@
 {
   "name": "daily-trace",
-  "version": "2.0.0",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -17,8 +17,6 @@
     "cron:weekly": "node --env-file=.env --import tsx scripts/cron-weekly.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.100.1",
-    "bcryptjs": "^3.0.3",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "next": "16.2.1",
@@ -30,7 +28,6 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
-    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

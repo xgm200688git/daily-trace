@@ -1,13 +1,8 @@
 declare module "node:sqlite" {
-  export interface RunResult {
-    lastInsertRowid: number | bigint;
-    changes: number;
-  }
-
   export class StatementSync {
-    get<T = unknown>(...params: Array<string | number | null>): T | undefined;
+    get<T = unknown>(...params: Array<string | number | null>): T;
     all<T = unknown>(...params: Array<string | number | null>): T[];
-    run(...params: Array<string | number | null>): RunResult;
+    run(...params: Array<string | number | null>): void;
   }
 
   export class DatabaseSync {

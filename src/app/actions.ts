@@ -12,7 +12,6 @@ import {
   toggleWorkTaskStatus,
   updateLifeEntry,
   updateWorkTask,
-  type EntryRecord,
 } from "@/features/diary/service";
 import { generateDailyRecord } from "@/features/merge/service";
 import { generateWeeklyReportForWeek } from "@/features/reports/service";
@@ -24,9 +23,6 @@ import {
   toLocalWeekStartKey,
   weekStartFromDateKey,
 } from "@/lib/time";
-import { requireCurrentUserDbClient, getCurrentUserId } from "@/lib/auth";
-import { getCloudSyncManager } from "@/lib/cloud-sync";
-import { broadcastToUser } from "@/lib/sse-broadcast";
 
 function withStatus(tab: string, message: string, tone: "success" | "error") {
   const params = new URLSearchParams({
@@ -38,41 +34,18 @@ function withStatus(tab: string, message: string, tone: "success" | "error") {
   return `/?${params.toString()}`;
 }
 
-async function enqueueSyncAndBroadcast(
-  tableName: string,
-  recordId: string,
-  operation: "insert" | "update" | "delete",
-  changeData?: Record<string, unknown>
-) {
-  const userId = await getCurrentUserId();
-  const syncManager = getCloudSyncManager();
-  await syncManager.enqueueChange(tableName, recordId, operation, changeData);
-  
-  if (userId) {
-    broadcastToUser(userId, {
-      type: "change",
-      data: {
-        tableName,
-        recordId,
-        operation,
-        timestamp: new Date().toISOString(),
-      },
-    });
-  }
-}
-
-async function resolveWeekStart(dateKey: string, client: import("@/lib/db").DatabaseClient) {
-  const profile = await ensureProfileSettings(client);
+async function resolveWeekStart(dateKey: string) {
+  const profile = await ensureProfileSettings();
   return weekStartFromDateKey(dateKey, profile.weekStartsOn);
 }
 
-async function parseDateInput(value: FormDataEntryValue | null, client: import("@/lib/db").DatabaseClient): Promise<Date | undefined> {
+async function parseDateInput(value: FormDataEntryValue | null): Promise<Date | undefined> {
   if (!value || typeof value !== "string" || !value.trim()) {
     return undefined;
   }
 
   try {
-    const profile = await ensureProfileSettings(client);
+    const profile = await ensureProfileSettings();
     return fromDateTimeLocalValue(value, profile.timezone);
   } catch {
     return undefined;
@@ -80,32 +53,25 @@ async function parseDateInput(value: FormDataEntryValue | null, client: import("
 }
 
 export async function createLifeEntryAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
   const content = String(formData.get("content") || "").trim();
 
   if (!content) {
     redirect(withStatus("life", "生活记录不能为空。", "error"));
   }
 
-  const entry = await createLifeEntry(
-    {
-      content,
-      mood: String(formData.get("mood") || "").trim() || undefined,
-      tags: normalizeTags(String(formData.get("tags") || "")),
-      occurredAt: await parseDateInput(formData.get("occurredAt"), client),
-    },
-    client,
-  );
-  await generateDailyRecord(entry.localDate, "life", client);
-
-  await enqueueSyncAndBroadcast("entries", entry.id, "insert", entry as unknown as Record<string, unknown>);
+  const entry = await createLifeEntry({
+    content,
+    mood: String(formData.get("mood") || "").trim() || undefined,
+    tags: normalizeTags(String(formData.get("tags") || "")),
+    occurredAt: await parseDateInput(formData.get("occurredAt")),
+  });
+  await generateDailyRecord(entry.localDate, "life");
 
   revalidatePath("/");
   redirect(withStatus("life", "生活记录已保存。", "success"));
 }
 
 export async function updateLifeEntryAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
   const entryId = String(formData.get("entryId") || "");
   const content = String(formData.get("content") || "").trim();
 
@@ -113,48 +79,35 @@ export async function updateLifeEntryAction(formData: FormData) {
     redirect(withStatus("life", "生活记录更新失败。", "error"));
   }
 
-  const entry = await updateLifeEntry(
-    entryId,
-    {
-      content,
-      mood: String(formData.get("mood") || "").trim() || undefined,
-      tags: normalizeTags(String(formData.get("tags") || "")),
-      occurredAt: await parseDateInput(formData.get("occurredAt"), client),
-    },
-    client,
-  );
-  await generateDailyRecord(entry.localDate, "life", client);
-
-  await enqueueSyncAndBroadcast("entries", entry.id, "update", entry as unknown as Record<string, unknown>);
+  const entry = await updateLifeEntry(entryId, {
+    content,
+    mood: String(formData.get("mood") || "").trim() || undefined,
+    tags: normalizeTags(String(formData.get("tags") || "")),
+    occurredAt: await parseDateInput(formData.get("occurredAt")),
+  });
+  await generateDailyRecord(entry.localDate, "life");
 
   revalidatePath("/");
   redirect(withStatus("life", "生活记录已更新。", "success"));
 }
 
 export async function createWorkTaskAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
   const title = String(formData.get("title") || "").trim();
 
   if (!title) {
     redirect(withStatus("work", "任务标题不能为空。", "error"));
   }
 
-  const task = await createWorkTask(
-    {
-      title,
-      description: String(formData.get("description") || "").trim() || undefined,
-    },
-    client,
-  );
-
-  await enqueueSyncAndBroadcast("entries", task.id, "insert", task as unknown as Record<string, unknown>);
+  await createWorkTask({
+    title,
+    description: String(formData.get("description") || "").trim() || undefined,
+  });
 
   revalidatePath("/");
   redirect(withStatus("work", "工作任务已创建。", "success"));
 }
 
 export async function updateWorkTaskAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
   const entryId = String(formData.get("entryId") || "");
   const title = String(formData.get("title") || "").trim();
 
@@ -162,36 +115,29 @@ export async function updateWorkTaskAction(formData: FormData) {
     redirect(withStatus("work", "任务更新失败。", "error"));
   }
 
-  const task = await updateWorkTask(
-    entryId,
-    {
-      title,
-      description: String(formData.get("description") || "").trim() || undefined,
-    },
-    client,
-  );
+  const task = await updateWorkTask(entryId, {
+    title,
+    description: String(formData.get("description") || "").trim() || undefined,
+  });
 
   if (task.completedLocalDate) {
-    await generateDailyRecord(task.completedLocalDate, "work", client);
-    await generateWeeklyReportForWeek(await resolveWeekStart(task.completedLocalDate, client), {}, client);
+    await generateDailyRecord(task.completedLocalDate, "work");
+    await generateWeeklyReportForWeek(await resolveWeekStart(task.completedLocalDate));
   }
-
-  await enqueueSyncAndBroadcast("entries", task.id, "update", task as unknown as Record<string, unknown>);
 
   revalidatePath("/");
   redirect(withStatus("work", "任务已更新。", "success"));
 }
 
 export async function toggleWorkTaskStatusAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
   const entryId = String(formData.get("entryId") || "");
 
   if (!entryId) {
     redirect(withStatus("work", "任务状态切换失败。", "error"));
   }
 
-  const previous = await getEntryById(entryId, client);
-  const updated = await toggleWorkTaskStatus(entryId, client);
+  const previous = await getEntryById(entryId);
+  const updated = await toggleWorkTaskStatus(entryId);
 
   const affectedDates = Array.from(
     new Set(
@@ -202,18 +148,15 @@ export async function toggleWorkTaskStatusAction(formData: FormData) {
   );
 
   for (const date of affectedDates) {
-    await generateDailyRecord(date, "work", client);
-    await generateWeeklyReportForWeek(await resolveWeekStart(date, client), {}, client);
+    await generateDailyRecord(date, "work");
+    await generateWeeklyReportForWeek(await resolveWeekStart(date));
   }
-
-  await enqueueSyncAndBroadcast("entries", updated.id, "update", updated as unknown as Record<string, unknown>);
 
   revalidatePath("/");
   redirect(withStatus("work", "任务状态已更新。", "success"));
 }
 
 export async function deleteEntryAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
   const entryId = String(formData.get("entryId") || "");
   const tab = String(formData.get("tab") || "life");
 
@@ -221,34 +164,31 @@ export async function deleteEntryAction(formData: FormData) {
     redirect(withStatus(tab, "删除失败。", "error"));
   }
 
-  const entry = await getEntryById(entryId, client);
-  await softDeleteEntry(entryId, client);
+  const entry = await getEntryById(entryId);
+  await softDeleteEntry(entryId);
 
   if (entry.module === "life") {
-    await generateDailyRecord(entry.localDate, "life", client);
+    await generateDailyRecord(entry.localDate, "life");
   }
 
   if (entry.module === "work") {
     const affectedDate = entry.completedLocalDate ?? entry.localDate;
-    await generateDailyRecord(affectedDate, "work", client);
-    await generateWeeklyReportForWeek(await resolveWeekStart(affectedDate, client), {}, client);
+    await generateDailyRecord(affectedDate, "work");
+    await generateWeeklyReportForWeek(await resolveWeekStart(affectedDate));
   }
-
-  await enqueueSyncAndBroadcast("entries", entryId, "delete");
 
   revalidatePath("/");
   redirect(withStatus(tab, "记录已删除。", "success"));
 }
 
 export async function generateCurrentWeekReportAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
-  const profile = await ensureProfileSettings(client);
+  const profile = await ensureProfileSettings();
   const weekStart =
     String(formData.get("weekStart") || "").trim() ||
     toLocalWeekStartKey(new Date(), profile.timezone, profile.weekStartsOn);
   const templateId = String(formData.get("templateId") || "").trim() || undefined;
 
-  const report = await generateWeeklyReportForWeek(weekStart, { templateId }, client);
+  const report = await generateWeeklyReportForWeek(weekStart, { templateId });
   revalidatePath("/");
   redirect(
     withStatus(
@@ -260,24 +200,18 @@ export async function generateCurrentWeekReportAction(formData: FormData) {
 }
 
 export async function saveTemplateAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
   const rawJson = String(formData.get("definitionJson") || "").trim();
-  const templateId = String(formData.get("templateId") || "").trim() || undefined;
 
   if (!rawJson) {
     redirect(withStatus("reports", "模板 JSON 不能为空。", "error"));
   }
 
   try {
-    const template = await saveTemplateFromRawJson(
+    await saveTemplateFromRawJson(
       rawJson,
       String(formData.get("name") || "").trim() || undefined,
-      templateId,
-      client,
+      String(formData.get("templateId") || "").trim() || undefined,
     );
-
-    const operation = templateId ? "update" : "insert";
-    await enqueueSyncAndBroadcast("templates", template.id, operation, template as unknown as Record<string, unknown>);
   } catch (error) {
     redirect(
       withStatus(
@@ -293,45 +227,24 @@ export async function saveTemplateAction(formData: FormData) {
 }
 
 export async function setDefaultTemplateAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
   const templateId = String(formData.get("templateId") || "");
 
   if (!templateId) {
     redirect(withStatus("reports", "默认模板设置失败。", "error"));
   }
 
-  await setDefaultTemplate(templateId, client);
-  
-  const template = await client.get<{ id: string; updated_at: string }>(
-    "SELECT id, updated_at FROM templates WHERE id = ?",
-    [templateId]
-  );
-  if (template) {
-    await enqueueSyncAndBroadcast("templates", templateId, "update", template as unknown as Record<string, unknown>);
-  }
-
+  await setDefaultTemplate(templateId);
   revalidatePath("/");
   redirect(withStatus("reports", "默认模板已切换。", "success"));
 }
 
 export async function toggleAiAction(formData: FormData) {
-  const client = await requireCurrentUserDbClient();
-  await setAiEnabled(formData.get("aiEnabled") === "on", client);
-  
-  const profile = await client.get<{ id: number; updated_at: string }>(
-    "SELECT id, updated_at FROM profile_settings WHERE id = ?",
-    [1]
-  );
-  if (profile) {
-    await enqueueSyncAndBroadcast("profile_settings", String(profile.id), "update", profile as unknown as Record<string, unknown>);
-  }
-
+  await setAiEnabled(formData.get("aiEnabled") === "on");
   revalidatePath("/");
   redirect(withStatus("reports", "AI 设置已更新。", "success"));
 }
 
 export async function jumpToTodayAction() {
-  const client = await requireCurrentUserDbClient();
-  const profile = await ensureProfileSettings(client);
+  const profile = await ensureProfileSettings();
   redirect(`/?tab=life&today=${todayKey(profile.timezone)}`);
 }

@@ -1,11 +1,9 @@
-import { mkdirSync } from "fs";
-import { dirname, resolve } from "path";
-import { DatabaseSync, type RunResult } from "node:sqlite";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 declare global {
   var __dailyTraceDb: DatabaseClient | undefined;
-  var __usersDb: DatabaseClient | AsyncDatabaseClient | undefined;
 }
 
 type SqlValue = string | number | null;
@@ -14,85 +12,16 @@ export interface DatabaseClient {
   raw: DatabaseSync;
   get<T>(sql: string, params?: SqlValue[]): T | undefined;
   all<T>(sql: string, params?: SqlValue[]): T[];
-  run(sql: string, params?: SqlValue[]): RunResult;
+  run(sql: string, params?: SqlValue[]): void;
   transaction<T>(fn: () => T): T;
 }
 
-export interface AsyncDatabaseClient {
-  raw: DatabaseSync | SupabaseClient;
-  get<T>(sql: string, params?: SqlValue[]): Promise<T | undefined>;
-  all<T>(sql: string, params?: SqlValue[]): Promise<T[]>;
-  run(sql: string, params?: SqlValue[]): Promise<RunResult>;
-  transaction<T>(fn: () => Promise<T>): Promise<T>;
-}
-
 export function resolveDatabasePath(databaseUrl: string): string {
-  const isVercel = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
-  
   if (databaseUrl.startsWith("file:")) {
-    const path = databaseUrl.slice(5);
-    if (isVercel) {
-      return resolve("/tmp", path);
-    }
-    return resolve(process.cwd(), path);
+    return resolve(process.cwd(), databaseUrl.slice(5));
   }
 
-  if (isVercel) {
-    return resolve("/tmp", databaseUrl);
-  }
   return resolve(process.cwd(), databaseUrl);
-}
-
-function createUserSchema(db: DatabaseSync) {
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
-
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      user_id INTEGER NOT NULL,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-  `);
-}
-
-function addColumnIfNotExists(db: DatabaseSync, tableName: string, columnDefinition: string) {
-  const columnName = columnDefinition.split(' ')[0];
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
-  const hasColumn = columns.some(col => col.name === columnName);
-  if (!hasColumn) {
-    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`);
-  }
-}
-
-function migrateDatabase(db: DatabaseSync) {
-  try {
-    addColumnIfNotExists(db, 'profile_settings', 'deleted_at TEXT');
-    addColumnIfNotExists(db, 'templates', 'deleted_at TEXT');
-    addColumnIfNotExists(db, 'entries', 'deleted_at TEXT');
-    addColumnIfNotExists(db, 'daily_records', 'deleted_at TEXT');
-    addColumnIfNotExists(db, 'daily_records', 'created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
-    addColumnIfNotExists(db, 'weekly_reports', 'deleted_at TEXT');
-    addColumnIfNotExists(db, 'job_runs', 'deleted_at TEXT');
-    addColumnIfNotExists(db, 'change_queue', 'source_hash TEXT NOT NULL DEFAULT \'\'');
-    addColumnIfNotExists(db, 'change_queue', 'retry_count INTEGER NOT NULL DEFAULT 0');
-    addColumnIfNotExists(db, 'change_queue', 'last_retry_at TEXT');
-    addColumnIfNotExists(db, 'change_queue', 'error_message TEXT');
-  } catch (error) {
-    console.warn('Migration encountered an error (some columns may already exist):', error);
-  }
 }
 
 function createSchema(db: DatabaseSync) {
@@ -106,7 +35,6 @@ function createSchema(db: DatabaseSync) {
       week_starts_on INTEGER NOT NULL,
       ai_enabled INTEGER NOT NULL DEFAULT 0,
       default_template_id TEXT,
-      deleted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -118,7 +46,6 @@ function createSchema(db: DatabaseSync) {
       version INTEGER NOT NULL DEFAULT 1,
       is_default INTEGER NOT NULL DEFAULT 0,
       definition_json TEXT NOT NULL,
-      deleted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE
@@ -154,8 +81,6 @@ function createSchema(db: DatabaseSync) {
       source_hash TEXT NOT NULL,
       generator_mode TEXT NOT NULL,
       generated_at TEXT NOT NULL,
-      deleted_at TEXT,
-      created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE,
       UNIQUE (profile_id, module, record_date)
@@ -175,9 +100,7 @@ function createSchema(db: DatabaseSync) {
       source_hash TEXT NOT NULL,
       generator_mode TEXT NOT NULL,
       generated_at TEXT NOT NULL,
-      deleted_at TEXT,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE,
       FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL,
       UNIQUE (profile_id, week_start, revision)
@@ -193,34 +116,9 @@ function createSchema(db: DatabaseSync) {
       last_error TEXT,
       started_at TEXT NOT NULL,
       finished_at TEXT,
-      deleted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (profile_id) REFERENCES profile_settings(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS sync_status (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      last_sync_at TEXT,
-      sync_status TEXT NOT NULL DEFAULT 'pending',
-      last_error TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS change_queue (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      table_name TEXT NOT NULL,
-      record_id TEXT NOT NULL,
-      operation TEXT NOT NULL,
-      change_data TEXT,
-      status TEXT NOT NULL DEFAULT 'pending',
-      source_hash TEXT NOT NULL,
-      retry_count INTEGER NOT NULL DEFAULT 0,
-      last_retry_at TEXT,
-      error_message TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_entries_module_date
@@ -235,47 +133,7 @@ function createSchema(db: DatabaseSync) {
       ON templates(profile_id, is_default);
     CREATE INDEX IF NOT EXISTS idx_job_runs_type
       ON job_runs(profile_id, type, updated_at);
-
-    CREATE INDEX IF NOT EXISTS idx_profile_settings_updated_at
-      ON profile_settings(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_templates_updated_at
-      ON templates(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_entries_updated_at
-      ON entries(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_daily_records_updated_at
-      ON daily_records(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_weekly_reports_updated_at
-      ON weekly_reports(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_job_runs_updated_at
-      ON job_runs(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_sync_status_updated_at
-      ON sync_status(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_change_queue_status
-      ON change_queue(status, created_at);
-
-    CREATE TABLE IF NOT EXISTS conflict_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      table_name TEXT NOT NULL,
-      record_id TEXT NOT NULL,
-      conflict_type TEXT NOT NULL,
-      local_updated_at TEXT,
-      cloud_updated_at TEXT,
-      local_source_hash TEXT,
-      cloud_source_hash TEXT,
-      resolved_strategy TEXT NOT NULL,
-      winner_source TEXT NOT NULL,
-      local_data TEXT,
-      cloud_data TEXT,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_conflict_history_table_record
-      ON conflict_history(table_name, record_id);
-    CREATE INDEX IF NOT EXISTS idx_conflict_history_created_at
-      ON conflict_history(created_at);
   `);
-
-  migrateDatabase(db);
 }
 
 function makeClient(db: DatabaseSync): DatabaseClient {
@@ -288,7 +146,7 @@ function makeClient(db: DatabaseSync): DatabaseClient {
       return db.prepare(sql).all(...params) as T[];
     },
     run(sql: string, params: SqlValue[] = []) {
-      return db.prepare(sql).run(...params);
+      db.prepare(sql).run(...params);
     },
     transaction<T>(fn: () => T) {
       db.exec("BEGIN");
@@ -312,7 +170,6 @@ export function createDatabaseClient(
 
   const sqlite = new DatabaseSync(databasePath);
   createSchema(sqlite);
-  migrateDatabase(sqlite);
 
   return makeClient(sqlite);
 }
@@ -322,88 +179,6 @@ export const db =
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__dailyTraceDb = db;
-}
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const USE_SUPABASE = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
-
-let supabaseClientInstance: SupabaseClient | null = null;
-
-function getSupabaseClient(): SupabaseClient {
-  if (!supabaseClientInstance) {
-    supabaseClientInstance = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-  return supabaseClientInstance;
-}
-
-function convertParams(sql: string, params: SqlValue[]): { sql: string; params: SqlValue[] } {
-  let convertedSql = sql;
-  let paramIndex = 1;
-  while (convertedSql.indexOf("?") !== -1) {
-    convertedSql = convertedSql.replace("?", "$" + paramIndex);
-    paramIndex++;
-  }
-  return { sql: convertedSql, params };
-}
-
-function makeSupabaseClient(client: SupabaseClient): AsyncDatabaseClient {
-  return {
-    raw: client,
-    async get<T>(sql: string, params: SqlValue[] = []): Promise<T | undefined> {
-      const { sql: convertedSql, params: convertedParams } = convertParams(sql, params);
-      const { data, error } = await client.rpc("execute_sql", { sql_query: convertedSql, params: convertedParams });
-      if (error) throw error;
-      return (data as T[])[0];
-    },
-    async all<T>(sql: string, params: SqlValue[] = []): Promise<T[]> {
-      const { sql: convertedSql, params: convertedParams } = convertParams(sql, params);
-      const { data, error } = await client.rpc("execute_sql", { sql_query: convertedSql, params: convertedParams });
-      if (error) throw error;
-      return data as T[];
-    },
-    async run(sql: string, params: SqlValue[] = []): Promise<RunResult> {
-      const { sql: convertedSql, params: convertedParams } = convertParams(sql, params);
-      const { data, error } = await client.rpc("execute_sql", { sql_query: convertedSql, params: convertedParams });
-      if (error) throw error;
-      const resultData = data as any[];
-      return {
-        changes: resultData[0]?.changes || 0,
-        lastInsertRowid: resultData[0]?.last_insert_rowid,
-      } as RunResult;
-    },
-    async transaction<T>(fn: () => Promise<T>): Promise<T> {
-      return await fn();
-    },
-  };
-}
-
-export function createUserDatabaseClient(
-  databaseUrl = "file:./data/users.db",
-): DatabaseClient | AsyncDatabaseClient {
-  if (USE_SUPABASE) {
-    return makeSupabaseClient(getSupabaseClient());
-  }
-
-  const databasePath = resolveDatabasePath(databaseUrl);
-  mkdirSync(dirname(databasePath), { recursive: true });
-
-  const sqlite = new DatabaseSync(databasePath);
-  createUserSchema(sqlite);
-
-  return makeClient(sqlite);
-}
-
-export const usersDb: DatabaseClient | AsyncDatabaseClient =
-  globalThis.__usersDb ?? createUserDatabaseClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__usersDb = usersDb;
-}
-
-export function getUserDatabaseClient(userId: number): DatabaseClient {
-  const databaseUrl = `file:./data/users/${userId}/daily-trace.db`;
-  return createDatabaseClient(databaseUrl);
 }
 
 export function fromDbBoolean(value: number | null | undefined): boolean {
@@ -416,16 +191,4 @@ export function toDbBoolean(value: boolean): number {
 
 export function nowIso(): string {
   return new Date().toISOString();
-}
-
-const userDbCache = new Map<number, DatabaseClient>();
-
-export function getCurrentUserDb(userId: number): DatabaseClient {
-  if (userDbCache.has(userId)) {
-    return userDbCache.get(userId)!;
-  }
-
-  const db = getUserDatabaseClient(userId);
-  userDbCache.set(userId, db);
-  return db;
 }

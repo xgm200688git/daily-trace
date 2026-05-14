@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { ensureCronAuthorized } from "@/lib/cron";
 import { reconcileOnAppOpen } from "@/features/reconcile/service";
 
-export const dynamic = 'force-dynamic';
-
 export async function POST(request: Request) {
   const unauthorized = ensureCronAuthorized(request);
 
