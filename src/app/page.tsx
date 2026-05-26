@@ -11,7 +11,9 @@ import {
   updateWorkTaskAction,
 } from "@/app/actions";
 import { CopyButton } from "@/components/copy-button";
+import { InstallApp } from "@/components/install-app";
 import { StatusBanner } from "@/components/status-banner";
+import { SubmitButton } from "@/components/submit-button";
 import { TabNav } from "@/components/tab-nav";
 import { getDashboardData } from "@/features/dashboard/service";
 import { parseWeeklySections } from "@/features/reports/service";
@@ -98,7 +100,7 @@ export default async function Home({
     : {};
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-28 pt-6 md:px-8 md:pb-12">
+    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-12">
       <header className="grid gap-6 rounded-[2rem] border border-black/6 bg-white/82 px-6 py-6 shadow-[0_24px_80px_rgba(31,20,10,0.06)] backdrop-blur md:grid-cols-[1.4fr_1fr] md:px-8">
         <div className="space-y-4">
           <p className="text-sm font-medium uppercase tracking-[0.18em] text-stone-400">
@@ -115,6 +117,10 @@ export default async function Home({
           </div>
         </div>
         <div className="grid gap-3 rounded-[1.6rem] border border-black/5 bg-stone-950 px-5 py-5 text-stone-100">
+          <div className="flex items-center justify-between text-sm text-stone-300">
+            <span>手机端</span>
+            <InstallApp />
+          </div>
           <div className="flex items-center justify-between text-sm text-stone-300">
             <span>当前时区</span>
             <span className="font-mono text-xs">{data.profile.timezone}</span>
@@ -150,33 +156,48 @@ export default async function Home({
                 </h2>
               </div>
               <form action={createLifeEntryAction} className="grid gap-3">
-                <textarea
-                  name="content"
-                  rows={5}
-                  required
-                  placeholder="写下今天的片段、情绪或一句话。"
-                  className="w-full rounded-[1.5rem] border border-black/8 bg-stone-50 px-4 py-4 text-base text-stone-900 outline-none transition focus:border-stone-300"
-                />
+                <label className="grid gap-2 text-sm font-medium text-stone-700">
+                  生活内容
+                  <textarea
+                    name="content"
+                    rows={5}
+                    required
+                    placeholder="写下今天的片段、情绪或一句话。"
+                    className="w-full rounded-[1.5rem] border border-black/8 bg-stone-50 px-4 py-4 text-base text-stone-900 outline-none transition focus:border-stone-300"
+                  />
+                </label>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <input
-                    name="mood"
-                    placeholder="心情，例如：平静 / 开心"
-                    className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
-                  />
-                  <input
-                    name="tags"
-                    placeholder="标签，逗号分隔"
-                    className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
-                  />
-                  <input
-                    name="occurredAt"
-                    type="datetime-local"
-                    className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
-                  />
+                  <label className="grid gap-2 text-sm font-medium text-stone-700">
+                    心情
+                    <input
+                      name="mood"
+                      placeholder="平静 / 开心"
+                      className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-stone-700">
+                    标签
+                    <input
+                      name="tags"
+                      placeholder="逗号分隔"
+                      className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-stone-700">
+                    发生时间
+                    <input
+                      name="occurredAt"
+                      type="datetime-local"
+                      className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                    />
+                  </label>
                 </div>
-                <button className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800">
+                <SubmitButton
+                  pendingText="保存中..."
+                  className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   保存生活记录
-                </button>
+                </SubmitButton>
               </form>
             </div>
 
@@ -211,7 +232,10 @@ export default async function Home({
                         <form action={deleteEntryAction}>
                           <input type="hidden" name="entryId" value={entry.id} />
                           <input type="hidden" name="tab" value="life" />
-                          <button className="text-xs font-medium text-stone-400 transition hover:text-rose-600">
+                          <button
+                            aria-label={`删除 ${formatLocalTime(new Date(entry.occurredAt), data.profile.timezone)} 的生活记录`}
+                            className="text-xs font-medium text-stone-400 transition hover:text-rose-600"
+                          >
                             删除
                           </button>
                         </form>
@@ -222,36 +246,51 @@ export default async function Home({
                         </summary>
                         <form action={updateLifeEntryAction} className="mt-3 grid gap-3">
                           <input type="hidden" name="entryId" value={entry.id} />
-                          <textarea
-                            name="content"
-                            rows={4}
-                            defaultValue={entry.content}
-                            className="w-full rounded-2xl border border-black/8 bg-white px-4 py-4 text-sm outline-none transition focus:border-stone-300"
-                          />
+                          <label className="grid gap-2 text-sm font-medium text-stone-700">
+                            生活内容
+                            <textarea
+                              name="content"
+                              rows={4}
+                              defaultValue={entry.content}
+                              className="w-full rounded-2xl border border-black/8 bg-white px-4 py-4 text-sm outline-none transition focus:border-stone-300"
+                            />
+                          </label>
                           <div className="grid gap-3 md:grid-cols-3">
-                            <input
-                              name="mood"
-                              defaultValue={entry.mood ?? ""}
-                              className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
-                            />
-                            <input
-                              name="tags"
-                              defaultValue={entry.tags.join(", ")}
-                              className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
-                            />
-                            <input
-                              name="occurredAt"
-                              type="datetime-local"
-                              defaultValue={toDateTimeLocalValue(
-                                entry.occurredAt,
-                                data.profile.timezone,
-                              )}
-                              className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
-                            />
+                            <label className="grid gap-2 text-sm font-medium text-stone-700">
+                              心情
+                              <input
+                                name="mood"
+                                defaultValue={entry.mood ?? ""}
+                                className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                              />
+                            </label>
+                            <label className="grid gap-2 text-sm font-medium text-stone-700">
+                              标签
+                              <input
+                                name="tags"
+                                defaultValue={entry.tags.join(", ")}
+                                className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                              />
+                            </label>
+                            <label className="grid gap-2 text-sm font-medium text-stone-700">
+                              发生时间
+                              <input
+                                name="occurredAt"
+                                type="datetime-local"
+                                defaultValue={toDateTimeLocalValue(
+                                  entry.occurredAt,
+                                  data.profile.timezone,
+                                )}
+                                className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                              />
+                            </label>
                           </div>
-                          <button className="inline-flex w-fit items-center rounded-full border border-black/8 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-black/20 hover:text-black">
+                          <SubmitButton
+                            pendingText="保存中..."
+                            className="inline-flex w-fit items-center rounded-full border border-black/8 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                          >
                             保存修改
-                          </button>
+                          </SubmitButton>
                         </form>
                       </details>
                     </article>
@@ -274,21 +313,30 @@ export default async function Home({
                 <h2 className="text-2xl font-semibold text-stone-950">新建任务</h2>
               </div>
               <form action={createWorkTaskAction} className="grid gap-3">
-                <input
-                  name="title"
-                  required
-                  placeholder="任务标题"
-                  className="rounded-full border border-black/8 bg-stone-50 px-4 py-3 text-base outline-none transition focus:border-stone-300"
-                />
-                <textarea
-                  name="description"
-                  rows={4}
-                  placeholder="补充任务描述、会议纪要或进展背景。"
-                  className="w-full rounded-[1.5rem] border border-black/8 bg-stone-50 px-4 py-4 text-base text-stone-900 outline-none transition focus:border-stone-300"
-                />
-                <button className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800">
+                <label className="grid gap-2 text-sm font-medium text-stone-700">
+                  任务标题
+                  <input
+                    name="title"
+                    required
+                    placeholder="例如：补齐首页数据视图"
+                    className="rounded-full border border-black/8 bg-stone-50 px-4 py-3 text-base outline-none transition focus:border-stone-300"
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-stone-700">
+                  任务描述
+                  <textarea
+                    name="description"
+                    rows={4}
+                    placeholder="补充任务描述、会议纪要或进展背景。"
+                    className="w-full rounded-[1.5rem] border border-black/8 bg-stone-50 px-4 py-4 text-base text-stone-900 outline-none transition focus:border-stone-300"
+                  />
+                </label>
+                <SubmitButton
+                  pendingText="创建中..."
+                  className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   创建任务
-                </button>
+                </SubmitButton>
               </form>
             </div>
 
@@ -306,50 +354,65 @@ export default async function Home({
                   {data.pendingWorkTasks.length ? (
                     data.pendingWorkTasks.map((task) => (
                       <article key={task.id} className="rounded-[1.6rem] border border-black/6 bg-stone-50 px-4 py-4">
-                        <form action={toggleWorkTaskStatusAction}>
-                          <input type="hidden" name="entryId" value={task.id} />
-                          <button className="flex w-full items-start gap-3 text-left">
-                            <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-stone-400 text-[10px] text-stone-400">
-                              ○
-                            </span>
-                            <span className="space-y-1">
-                              <span className="block text-base font-medium text-stone-900">
-                                {task.title}
-                              </span>
-                              {task.content ? (
-                                <span className="block text-sm leading-6 text-stone-600">
-                                  {task.content}
-                                </span>
-                              ) : null}
-                            </span>
-                          </button>
-                        </form>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <p className="break-words text-base font-medium text-stone-900">
+                              {task.title}
+                            </p>
+                            {task.content ? (
+                              <p className="break-words text-sm leading-6 text-stone-600">
+                                {task.content}
+                              </p>
+                            ) : null}
+                          </div>
+                          <form action={toggleWorkTaskStatusAction}>
+                            <input type="hidden" name="entryId" value={task.id} />
+                            <SubmitButton
+                              pendingText="处理中..."
+                              className="shrink-0 rounded-full border border-stone-300 bg-white px-3 py-2 text-xs font-medium text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              标记完成
+                            </SubmitButton>
+                          </form>
+                        </div>
                         <details className="mt-3 rounded-2xl bg-white px-4 py-3">
                           <summary className="cursor-pointer text-sm font-medium text-stone-600">
                             编辑任务
                           </summary>
                           <form action={updateWorkTaskAction} className="mt-3 grid gap-3">
                             <input type="hidden" name="entryId" value={task.id} />
-                            <input
-                              name="title"
-                              defaultValue={task.title ?? ""}
-                              className="rounded-full border border-black/8 bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-stone-300"
-                            />
-                            <textarea
-                              name="description"
-                              rows={3}
-                              defaultValue={task.content}
-                              className="rounded-2xl border border-black/8 bg-stone-50 px-4 py-4 text-sm outline-none transition focus:border-stone-300"
-                            />
-                            <button className="inline-flex w-fit items-center rounded-full border border-black/8 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-black/20 hover:text-black">
+                            <label className="grid gap-2 text-sm font-medium text-stone-700">
+                              任务标题
+                              <input
+                                name="title"
+                                defaultValue={task.title ?? ""}
+                                className="rounded-full border border-black/8 bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                              />
+                            </label>
+                            <label className="grid gap-2 text-sm font-medium text-stone-700">
+                              任务描述
+                              <textarea
+                                name="description"
+                                rows={3}
+                                defaultValue={task.content}
+                                className="rounded-2xl border border-black/8 bg-stone-50 px-4 py-4 text-sm outline-none transition focus:border-stone-300"
+                              />
+                            </label>
+                            <SubmitButton
+                              pendingText="保存中..."
+                              className="inline-flex w-fit items-center rounded-full border border-black/8 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                            >
                               保存修改
-                            </button>
+                            </SubmitButton>
                           </form>
                         </details>
                         <form action={deleteEntryAction} className="mt-3">
                           <input type="hidden" name="entryId" value={task.id} />
                           <input type="hidden" name="tab" value="work" />
-                          <button className="text-xs font-medium text-stone-400 transition hover:text-rose-600">
+                          <button
+                            aria-label={`删除任务：${task.title}`}
+                            className="text-xs font-medium text-stone-400 transition hover:text-rose-600"
+                          >
                             删除
                           </button>
                         </form>
@@ -374,24 +437,32 @@ export default async function Home({
                   {data.completedWorkTasks.length ? (
                     data.completedWorkTasks.map((task) => (
                       <article key={task.id} className="rounded-[1.5rem] border border-black/6 bg-stone-50 px-4 py-4">
-                        <form action={toggleWorkTaskStatusAction}>
-                          <input type="hidden" name="entryId" value={task.id} />
-                          <button className="flex w-full items-start gap-3 text-left">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
                             <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-stone-900 text-[10px] text-stone-50">
                               ✓
                             </span>
-                            <span className="space-y-1">
-                              <span className="block text-base font-medium text-stone-500 line-through">
+                            <div className="min-w-0 space-y-1">
+                              <p className="break-words text-base font-medium text-stone-500 line-through">
                                 {task.title}
-                              </span>
+                              </p>
                               {task.content ? (
-                                <span className="block text-sm leading-6 text-stone-500">
+                                <p className="break-words text-sm leading-6 text-stone-500">
                                   {task.content}
-                                </span>
+                                </p>
                               ) : null}
-                            </span>
-                          </button>
-                        </form>
+                            </div>
+                          </div>
+                          <form action={toggleWorkTaskStatusAction}>
+                            <input type="hidden" name="entryId" value={task.id} />
+                            <SubmitButton
+                              pendingText="处理中..."
+                              className="shrink-0 rounded-full border border-black/8 bg-white px-3 py-2 text-xs font-medium text-stone-600 transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              撤回
+                            </SubmitButton>
+                          </form>
+                        </div>
                       </article>
                     ))
                   ) : (
@@ -418,13 +489,13 @@ export default async function Home({
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
                   <article className="rounded-[1.6rem] border border-black/6 bg-stone-50 px-4 py-4">
                     <p className="mb-3 text-sm font-medium text-stone-400">生活日报</p>
-                    <pre className="whitespace-pre-wrap text-sm leading-7 text-stone-700">
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-7 text-stone-700">
                       {lifeRecord?.contentMarkdown ?? "今天还没有生活日报内容。"}
                     </pre>
                   </article>
                   <article className="rounded-[1.6rem] border border-black/6 bg-stone-50 px-4 py-4">
                     <p className="mb-3 text-sm font-medium text-stone-400">工作日报</p>
-                    <pre className="whitespace-pre-wrap text-sm leading-7 text-stone-700">
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-7 text-stone-700">
                       {workRecord?.contentMarkdown ?? "今天还没有工作日报内容。"}
                     </pre>
                   </article>
@@ -445,27 +516,33 @@ export default async function Home({
                 </div>
                 <form action={generateCurrentWeekReportAction} className="mt-5 flex flex-col gap-3 md:flex-row md:items-center">
                   <input type="hidden" name="weekStart" value={data.currentWeekStart} />
-                  <select
-                    name="templateId"
-                    defaultValue={data.templates.find((item) => item.isDefault)?.id}
-                    className="rounded-full border border-black/8 bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                  <label className="grid gap-2 text-sm font-medium text-stone-700">
+                    周报模板
+                    <select
+                      name="templateId"
+                      defaultValue={data.templates.find((item) => item.isDefault)?.id}
+                      className="rounded-full border border-black/8 bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                    >
+                      {data.templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                          {template.isDefault ? "（默认）" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <SubmitButton
+                    pendingText="生成中..."
+                    className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60 md:self-end"
                   >
-                    {data.templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                        {template.isDefault ? "（默认）" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800">
                     一键生成本周周报
-                  </button>
+                  </SubmitButton>
                 </form>
 
                 <div className="mt-6 space-y-4">
                   {data.currentWeeklyReport ? (
                     <>
-                      <pre className="whitespace-pre-wrap rounded-[1.6rem] border border-black/6 bg-stone-50 px-4 py-4 text-sm leading-7 text-stone-700">
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-[1.6rem] border border-black/6 bg-stone-50 px-4 py-4 text-sm leading-7 text-stone-700">
                         {data.currentWeeklyReport.contentMarkdown}
                       </pre>
                       <ReportSectionList sections={currentWeeklySections} />
@@ -485,7 +562,7 @@ export default async function Home({
                   <p className="text-sm font-medium text-stone-400">生成设置</p>
                   <h3 className="text-xl font-semibold text-stone-950">模板与 AI</h3>
                 </div>
-                <form action={toggleAiAction} className="mt-4 flex items-center justify-between rounded-[1.4rem] border border-black/6 bg-stone-50 px-4 py-4">
+                <form action={toggleAiAction} className="mt-4 grid gap-4 rounded-[1.4rem] border border-black/6 bg-stone-50 px-4 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                   <div>
                     <p className="text-sm font-medium text-stone-900">启用 AI 增强</p>
                     <p className="text-xs leading-6 text-stone-500">
@@ -501,27 +578,36 @@ export default async function Home({
                     />
                     启用
                   </label>
-                  <button className="rounded-full border border-black/8 px-4 py-2 text-xs font-medium text-stone-700 transition hover:border-black/20 hover:text-black">
+                  <SubmitButton
+                    pendingText="保存中..."
+                    className="w-fit rounded-full border border-black/8 px-4 py-2 text-xs font-medium text-stone-700 transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                  >
                     保存
-                  </button>
+                  </SubmitButton>
                 </form>
 
                 <form action={setDefaultTemplateAction} className="mt-4 grid gap-3">
-                  <select
-                    name="templateId"
-                    defaultValue={data.templates.find((item) => item.isDefault)?.id}
-                    className="rounded-full border border-black/8 bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                  <label className="grid gap-2 text-sm font-medium text-stone-700">
+                    默认模板
+                    <select
+                      name="templateId"
+                      defaultValue={data.templates.find((item) => item.isDefault)?.id}
+                      className="rounded-full border border-black/8 bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                    >
+                      {data.templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                          {template.isDefault ? "（默认）" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <SubmitButton
+                    pendingText="设置中..."
+                    className="inline-flex w-fit items-center rounded-full border border-black/8 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-black/20 hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {data.templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                        {template.isDefault ? "（默认）" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="inline-flex w-fit items-center rounded-full border border-black/8 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-black/20 hover:text-black">
                     设为默认模板
-                  </button>
+                  </SubmitButton>
                 </form>
 
                 <details className="mt-5 rounded-[1.6rem] bg-stone-50 px-4 py-4">
@@ -529,20 +615,29 @@ export default async function Home({
                     新建 / 导入自定义模板
                   </summary>
                   <form action={saveTemplateAction} className="mt-4 grid gap-3">
-                    <input
-                      name="name"
-                      placeholder="模板名称"
-                      className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
-                    />
-                    <textarea
-                      name="definitionJson"
-                      rows={16}
-                      defaultValue={toJsonString(DEFAULT_TEMPLATE_DEFINITION)}
-                      className="rounded-[1.5rem] border border-black/8 bg-white px-4 py-4 text-sm font-mono leading-6 outline-none transition focus:border-stone-300"
-                    />
-                    <button className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800">
+                    <label className="grid gap-2 text-sm font-medium text-stone-700">
+                      模板名称
+                      <input
+                        name="name"
+                        placeholder="例如：项目周报"
+                        className="rounded-full border border-black/8 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-300"
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-stone-700">
+                      模板 JSON
+                      <textarea
+                        name="definitionJson"
+                        rows={16}
+                        defaultValue={toJsonString(DEFAULT_TEMPLATE_DEFINITION)}
+                        className="rounded-[1.5rem] border border-black/8 bg-white px-4 py-4 text-sm font-mono leading-6 outline-none transition focus:border-stone-300"
+                      />
+                    </label>
+                    <SubmitButton
+                      pendingText="保存中..."
+                      className="inline-flex w-fit items-center rounded-full bg-stone-950 px-5 py-3 text-sm font-medium text-stone-50 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
                       保存模板
-                    </button>
+                    </SubmitButton>
                   </form>
                 </details>
               </div>

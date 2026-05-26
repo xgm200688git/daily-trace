@@ -39,17 +39,22 @@ async function resolveWeekStart(dateKey: string) {
   return weekStartFromDateKey(dateKey, profile.weekStartsOn);
 }
 
-async function parseDateInput(value: FormDataEntryValue | null): Promise<Date | undefined> {
+async function parseDateInput(
+  value: FormDataEntryValue | null,
+  tab: "life" | "work" | "reports",
+): Promise<Date | undefined> {
   if (!value || typeof value !== "string" || !value.trim()) {
     return undefined;
   }
 
-  try {
-    const profile = await ensureProfileSettings();
-    return fromDateTimeLocalValue(value, profile.timezone);
-  } catch {
-    return undefined;
+  const profile = await ensureProfileSettings();
+  const date = fromDateTimeLocalValue(value, profile.timezone);
+
+  if (!date || Number.isNaN(date.getTime())) {
+    redirect(withStatus(tab, "时间格式无效，请重新选择时间。", "error"));
   }
+
+  return date;
 }
 
 export async function createLifeEntryAction(formData: FormData) {
@@ -63,7 +68,7 @@ export async function createLifeEntryAction(formData: FormData) {
     content,
     mood: String(formData.get("mood") || "").trim() || undefined,
     tags: normalizeTags(String(formData.get("tags") || "")),
-    occurredAt: await parseDateInput(formData.get("occurredAt")),
+    occurredAt: await parseDateInput(formData.get("occurredAt"), "life"),
   });
   await generateDailyRecord(entry.localDate, "life");
 
@@ -83,7 +88,7 @@ export async function updateLifeEntryAction(formData: FormData) {
     content,
     mood: String(formData.get("mood") || "").trim() || undefined,
     tags: normalizeTags(String(formData.get("tags") || "")),
-    occurredAt: await parseDateInput(formData.get("occurredAt")),
+    occurredAt: await parseDateInput(formData.get("occurredAt"), "life"),
   });
   await generateDailyRecord(entry.localDate, "life");
 

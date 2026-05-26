@@ -15,7 +15,11 @@ export function StatusBanner({
       : "border-emerald-200 bg-emerald-50 text-emerald-700";
 
   return (
-    <div className={`rounded-2xl border px-4 py-3 text-sm ${styles}`}>
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      aria-live={tone === "error" ? "assertive" : "polite"}
+      className={`rounded-2xl border px-4 py-3 text-sm ${styles}`}
+    >
       {message}
     </div>
   );

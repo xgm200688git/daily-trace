@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="每日轨迹">
+  <rect width="512" height="512" fill="#181411"/>
+  <rect x="96" y="104" width="320" height="304" rx="48" fill="#F7F4EE"/>
+  <path d="M156 184h200M156 252h200M156 320h122" stroke="#181411" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="360" cy="324" r="36" fill="#4F7D5A"/>
+</svg>

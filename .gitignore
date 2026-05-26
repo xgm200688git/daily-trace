@@ -45,3 +45,12 @@ next-env.d.ts
 /test-results
 /.trae
 /.env
+
+# android build outputs
+/android/.gradle/
+/android/app/build/
+/android/build/
+
+# android signing secrets
+/android/key.properties
+/android/keystores/

@@ -8,6 +8,8 @@ function main() {
 
   rmSync(databasePath, { force: true });
   rmSync(`${databasePath}-journal`, { force: true });
+  rmSync(`${databasePath}-wal`, { force: true });
+  rmSync(`${databasePath}-shm`, { force: true });
   createDatabaseClient(databaseUrl);
   console.log("database reset");
 }

@@ -2,28 +2,43 @@
   "name": "daily-trace",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "next dev",
+    "dev:mobile": "next dev --hostname 0.0.0.0",
+    "dev:test": "next dev --hostname 127.0.0.1",
     "build": "next build --webpack",
     "start": "next start",
+    "android:sync": "npx cap sync android",
+    "apk:debug": "npx cap sync android && cd android && ./gradlew assembleDebug",
+    "apk:release": "npx cap sync android && cd android && ./gradlew assembleRelease",
+    "aab:release": "npx cap sync android && cd android && ./gradlew bundleRelease",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "db:init": "node --env-file=.env --import tsx scripts/init-db.ts",
-    "db:reset": "node --env-file=.env --import tsx scripts/reset-db.ts",
-    "cron:daily": "node --env-file=.env --import tsx scripts/cron-daily.ts",
-    "cron:weekly": "node --env-file=.env --import tsx scripts/cron-weekly.ts"
+    "db:init": "node --env-file-if-exists=.env --import tsx scripts/init-db.ts",
+    "db:reset": "node --env-file-if-exists=.env --import tsx scripts/reset-db.ts",
+    "cron:daily": "node --env-file-if-exists=.env --import tsx scripts/cron-daily.ts",
+    "cron:weekly": "node --env-file-if-exists=.env --import tsx scripts/cron-weekly.ts"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
-    "next": "16.2.1",
+    "next": "^16.2.6",
     "openai": "^6.33.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zod": "^4.3.6"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -32,7 +47,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.1",
+    "eslint-config-next": "^16.2.6",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",
