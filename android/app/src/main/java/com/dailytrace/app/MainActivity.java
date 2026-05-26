@@ -5,11 +5,13 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteException;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
@@ -29,6 +31,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 public class MainActivity extends Activity {
+    private static final String TAG = "DailyTrace";
     private static final String TAB_LIFE = "life";
     private static final String TAB_WORK = "work";
     private static final String TAB_REPORTS = "reports";
@@ -83,6 +86,27 @@ public class MainActivity extends Activity {
         }
 
         setContentView(root);
+    }
+
+    private void performAction(String successMessage, View keyboardAnchor, DiaryAction action) {
+        try {
+            action.run();
+            if (keyboardAnchor != null) {
+                hideKeyboard(keyboardAnchor);
+            }
+            setStatus(successMessage);
+        } catch (Exception error) {
+            Log.e(TAG, "Diary action failed", error);
+            setStatus("操作失败：" + userFacingError(error));
+        }
+    }
+
+    private String userFacingError(Exception error) {
+        String message = error.getMessage();
+        if (notBlank(message)) {
+            return message;
+        }
+        return "请关闭应用后重新打开再试。";
     }
 
     private void addHeader(LinearLayout parent) {
@@ -141,10 +165,10 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            addLifeEntry(value, mood.getText().toString().trim(), tags.getText().toString().trim());
-            generateDailyRecord(todayKey(), "life");
-            hideKeyboard(content);
-            setStatus("生活记录已保存。");
+            performAction("生活记录已保存。", content, () -> {
+                addLifeEntry(value, mood.getText().toString().trim(), tags.getText().toString().trim());
+                generateDailyRecord(todayKey(), "life");
+            });
         });
         form.addView(save);
         parent.addView(form);
@@ -164,7 +188,7 @@ public class MainActivity extends Activity {
                 LinearLayout item = card();
                 String id = cursor.getString(0);
                 long occurredAt = cursor.getLong(1);
-                String body = cursor.getString(2);
+                String body = safeText(cursor.getString(2));
                 String moodValue = cursor.getString(3);
                 String tagValue = cursor.getString(4);
 
@@ -176,9 +200,10 @@ public class MainActivity extends Activity {
 
                 Button delete = outlineButton("删除");
                 delete.setOnClickListener(v -> {
-                    softDelete(id);
-                    generateDailyRecord(todayKey(), "life");
-                    setStatus("生活记录已删除。");
+                    performAction("生活记录已删除。", null, () -> {
+                        softDelete(id);
+                        generateDailyRecord(todayKey(), "life");
+                    });
                 });
                 item.addView(delete);
                 parent.addView(item);
@@ -203,9 +228,7 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            addWorkTask(value, description.getText().toString().trim());
-            hideKeyboard(title);
-            setStatus("工作任务已创建。");
+            performAction("工作任务已创建。", title, () -> addWorkTask(value, description.getText().toString().trim()));
         });
         form.addView(create);
         parent.addView(form);
@@ -231,8 +254,8 @@ public class MainActivity extends Activity {
             do {
                 LinearLayout item = card();
                 String id = cursor.getString(0);
-                String title = cursor.getString(1);
-                String content = cursor.getString(2);
+                String title = safeText(cursor.getString(1));
+                String content = safeText(cursor.getString(2));
                 String completedDate = cursor.getString(3);
 
                 item.addView(text(title, 16, "#292524", Typeface.BOLD));
@@ -246,23 +269,22 @@ public class MainActivity extends Activity {
                 Button toggle = outlineButton("completed".equals(status) ? "撤回" : "标记完成");
                 toggle.setOnClickListener(v -> {
                     if ("completed".equals(status)) {
-                        reopenTask(id, completedDate);
-                        setStatus("任务已撤回待处理。");
+                        performAction("任务已撤回待处理。", null, () -> reopenTask(id, completedDate));
                     } else {
-                        completeTask(id);
-                        setStatus("任务已标记完成。");
+                        performAction("任务已标记完成。", null, () -> completeTask(id));
                     }
                 });
                 actions.addView(toggle, new LinearLayout.LayoutParams(0, dp(44), 1));
 
                 Button delete = outlineButton("删除");
                 delete.setOnClickListener(v -> {
-                    softDelete(id);
-                    if (notBlank(completedDate)) {
-                        generateDailyRecord(completedDate, "work");
-                        generateWeeklyReport(weekStart(completedDate));
-                    }
-                    setStatus("任务已删除。");
+                    performAction("任务已删除。", null, () -> {
+                        softDelete(id);
+                        if (notBlank(completedDate)) {
+                            generateDailyRecord(completedDate, "work");
+                            generateWeeklyReport(weekStart(completedDate));
+                        }
+                    });
                 });
                 actions.addView(delete, new LinearLayout.LayoutParams(0, dp(44), 1));
                 item.addView(actions);
@@ -278,16 +300,16 @@ public class MainActivity extends Activity {
 
         Button mergeToday = primaryButton("刷新今日日报");
         mergeToday.setOnClickListener(v -> {
-            generateDailyRecord(todayKey(), "life");
-            generateDailyRecord(todayKey(), "work");
-            setStatus("今日日报已刷新。");
+            performAction("今日日报已刷新。", null, () -> {
+                generateDailyRecord(todayKey(), "life");
+                generateDailyRecord(todayKey(), "work");
+            });
         });
         actions.addView(mergeToday);
 
         Button weekly = primaryButton("生成本周周报");
         weekly.setOnClickListener(v -> {
-            generateWeeklyReport(currentWeekStart());
-            setStatus("本周周报已生成。");
+            performAction("本周周报已生成。", null, () -> generateWeeklyReport(currentWeekStart()));
         });
         actions.addView(weekly);
         parent.addView(actions);
@@ -308,7 +330,7 @@ public class MainActivity extends Activity {
         values.put("content", content);
         values.put("mood", emptyToNull(mood));
         values.put("tags", emptyToNull(tags));
-        helper.getWritableDatabase().insert("entries", null, values);
+        helper.getWritableDatabase().insertOrThrow("entries", null, values);
     }
 
     private void addWorkTask(String title, String description) {
@@ -317,7 +339,7 @@ public class MainActivity extends Activity {
         values.put("title", title);
         values.put("content", description);
         values.put("task_status", "pending");
-        helper.getWritableDatabase().insert("entries", null, values);
+        helper.getWritableDatabase().insertOrThrow("entries", null, values);
     }
 
     private ContentValues baseEntry(String module, long now) {
@@ -338,7 +360,7 @@ public class MainActivity extends Activity {
         values.put("completed_at", now);
         values.put("completed_local_date", dateKey(now));
         values.put("updated_at", now);
-        helper.getWritableDatabase().update("entries", values, "id=?", new String[]{id});
+        requireUpdated(helper.getWritableDatabase().update("entries", values, "id=?", new String[]{id}), "没有找到要完成的任务。");
         generateDailyRecord(dateKey(now), "work");
         generateWeeklyReport(currentWeekStart());
     }
@@ -349,7 +371,7 @@ public class MainActivity extends Activity {
         values.putNull("completed_at");
         values.putNull("completed_local_date");
         values.put("updated_at", System.currentTimeMillis());
-        helper.getWritableDatabase().update("entries", values, "id=?", new String[]{id});
+        requireUpdated(helper.getWritableDatabase().update("entries", values, "id=?", new String[]{id}), "没有找到要撤回的任务。");
         if (notBlank(completedDate)) {
             generateDailyRecord(completedDate, "work");
             generateWeeklyReport(weekStart(completedDate));
@@ -361,7 +383,13 @@ public class MainActivity extends Activity {
         long now = System.currentTimeMillis();
         values.put("deleted_at", now);
         values.put("updated_at", now);
-        helper.getWritableDatabase().update("entries", values, "id=?", new String[]{id});
+        requireUpdated(helper.getWritableDatabase().update("entries", values, "id=?", new String[]{id}), "没有找到要删除的记录。");
+    }
+
+    private void requireUpdated(int updated, String message) {
+        if (updated <= 0) {
+            throw new IllegalStateException(message);
+        }
     }
 
     private void generateDailyRecord(String dateKey, String module) {
@@ -376,7 +404,7 @@ public class MainActivity extends Activity {
         SQLiteDatabase db = helper.getWritableDatabase();
         int updated = db.update("daily_records", values, "module=? AND record_date=?", new String[]{module, dateKey});
         if (updated == 0) {
-            db.insert("daily_records", null, values);
+            db.insertOrThrow("daily_records", null, values);
         }
     }
 
@@ -398,7 +426,7 @@ public class MainActivity extends Activity {
                         .append("- ")
                         .append(timeFormat.format(new Date(cursor.getLong(0))))
                         .append(" ")
-                        .append(cursor.getString(1));
+                        .append(safeText(cursor.getString(1)));
                 if (notBlank(meta)) {
                     builder.append("（").append(meta).append("）");
                 }
@@ -421,13 +449,15 @@ public class MainActivity extends Activity {
             }
 
             do {
+                String title = safeText(cursor.getString(1));
+                String description = safeText(cursor.getString(2));
                 builder
                         .append("- ")
                         .append(timeFormat.format(new Date(cursor.getLong(0))))
                         .append(" ")
-                        .append(cursor.getString(1));
-                if (notBlank(cursor.getString(2))) {
-                    builder.append("：").append(cursor.getString(2));
+                        .append(title);
+                if (notBlank(description)) {
+                    builder.append("：").append(description);
                 }
                 builder.append("\n");
             } while (cursor.moveToNext());
@@ -447,7 +477,9 @@ public class MainActivity extends Activity {
                 new String[]{weekStart, weekEnd})) {
             while (cursor.moveToNext()) {
                 count += 1;
-                String line = cursor.getString(0) + (notBlank(cursor.getString(1)) ? "：" + cursor.getString(1) : "");
+                String title = safeText(cursor.getString(0));
+                String description = safeText(cursor.getString(1));
+                String line = title + (notBlank(description) ? "：" + description : "");
                 completed.append("- ").append(line).append("\n");
                 if (line.contains("阻塞") || line.contains("风险") || line.contains("问题") || line.contains("延期")) {
                     issues.append("- ").append(line).append("\n");
@@ -689,30 +721,116 @@ public class MainActivity extends Activity {
         return notBlank(value) ? value : null;
     }
 
+    private String safeText(String value) {
+        return value == null ? "" : value;
+    }
+
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    private interface DiaryAction {
+        void run() throws Exception;
+    }
+
     private static class DiaryDb extends SQLiteOpenHelper {
+        private static final int DB_VERSION = 2;
+
         DiaryDb(Context context) {
-            super(context, "daily-trace-native.db", null, 1);
+            super(context, "daily-trace-native.db", null, DB_VERSION);
         }
 
         @Override
         public void onCreate(SQLiteDatabase db) {
-            db.execSQL("CREATE TABLE entries (id TEXT PRIMARY KEY, module TEXT NOT NULL, occurred_at INTEGER NOT NULL, local_date TEXT NOT NULL, title TEXT, content TEXT NOT NULL, mood TEXT, tags TEXT, task_status TEXT, completed_at INTEGER, completed_local_date TEXT, deleted_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
-            db.execSQL("CREATE TABLE daily_records (id TEXT PRIMARY KEY, module TEXT NOT NULL, record_date TEXT NOT NULL, content_markdown TEXT NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(module, record_date))");
-            db.execSQL("CREATE TABLE weekly_reports (id TEXT PRIMARY KEY, week_start TEXT NOT NULL, week_end TEXT NOT NULL, revision INTEGER NOT NULL, is_current INTEGER NOT NULL, content_markdown TEXT NOT NULL, created_at INTEGER NOT NULL)");
-            db.execSQL("CREATE INDEX idx_entries_life_date ON entries(module, local_date)");
-            db.execSQL("CREATE INDEX idx_entries_work_completed ON entries(module, completed_local_date, task_status)");
+            createSchema(db);
         }
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+            try {
+                ensureSchema(db);
+            } catch (SQLiteException error) {
+                Log.e(TAG, "Database migration failed; recreating local schema", error);
+                recreateSchema(db);
+            }
+        }
+
+        @Override
+        public void onOpen(SQLiteDatabase db) {
+            super.onOpen(db);
+            if (!db.isReadOnly()) {
+                try {
+                    ensureSchema(db);
+                } catch (SQLiteException error) {
+                    Log.e(TAG, "Database schema check failed", error);
+                }
+            }
+        }
+
+        private void recreateSchema(SQLiteDatabase db) {
             db.execSQL("DROP TABLE IF EXISTS entries");
             db.execSQL("DROP TABLE IF EXISTS daily_records");
             db.execSQL("DROP TABLE IF EXISTS weekly_reports");
-            onCreate(db);
+            createSchema(db);
+        }
+
+        private void ensureSchema(SQLiteDatabase db) {
+            createSchema(db);
+            ensureColumn(db, "entries", "id", "TEXT");
+            ensureColumn(db, "entries", "module", "TEXT");
+            ensureColumn(db, "entries", "occurred_at", "INTEGER");
+            ensureColumn(db, "entries", "local_date", "TEXT");
+            ensureColumn(db, "entries", "title", "TEXT");
+            ensureColumn(db, "entries", "content", "TEXT");
+            ensureColumn(db, "entries", "mood", "TEXT");
+            ensureColumn(db, "entries", "tags", "TEXT");
+            ensureColumn(db, "entries", "task_status", "TEXT");
+            ensureColumn(db, "entries", "completed_at", "INTEGER");
+            ensureColumn(db, "entries", "completed_local_date", "TEXT");
+            ensureColumn(db, "entries", "deleted_at", "INTEGER");
+            ensureColumn(db, "entries", "created_at", "INTEGER");
+            ensureColumn(db, "entries", "updated_at", "INTEGER");
+
+            ensureColumn(db, "daily_records", "id", "TEXT");
+            ensureColumn(db, "daily_records", "module", "TEXT");
+            ensureColumn(db, "daily_records", "record_date", "TEXT");
+            ensureColumn(db, "daily_records", "content_markdown", "TEXT");
+            ensureColumn(db, "daily_records", "updated_at", "INTEGER");
+
+            ensureColumn(db, "weekly_reports", "id", "TEXT");
+            ensureColumn(db, "weekly_reports", "week_start", "TEXT");
+            ensureColumn(db, "weekly_reports", "week_end", "TEXT");
+            ensureColumn(db, "weekly_reports", "revision", "INTEGER");
+            ensureColumn(db, "weekly_reports", "is_current", "INTEGER");
+            ensureColumn(db, "weekly_reports", "content_markdown", "TEXT");
+            ensureColumn(db, "weekly_reports", "created_at", "INTEGER");
+        }
+
+        private void createSchema(SQLiteDatabase db) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, module TEXT NOT NULL, occurred_at INTEGER NOT NULL, local_date TEXT NOT NULL, title TEXT, content TEXT, mood TEXT, tags TEXT, task_status TEXT, completed_at INTEGER, completed_local_date TEXT, deleted_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS daily_records (id TEXT PRIMARY KEY, module TEXT NOT NULL, record_date TEXT NOT NULL, content_markdown TEXT NOT NULL, updated_at INTEGER NOT NULL)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS weekly_reports (id TEXT PRIMARY KEY, week_start TEXT NOT NULL, week_end TEXT NOT NULL, revision INTEGER NOT NULL, is_current INTEGER NOT NULL, content_markdown TEXT NOT NULL, created_at INTEGER NOT NULL)");
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_records_unique ON daily_records(module, record_date)");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_entries_life_date ON entries(module, local_date)");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_entries_work_completed ON entries(module, completed_local_date, task_status)");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_weekly_reports_current ON weekly_reports(week_start, is_current, revision)");
+        }
+
+        private void ensureColumn(SQLiteDatabase db, String table, String column, String definition) {
+            if (!hasColumn(db, table, column)) {
+                db.execSQL("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+            }
+        }
+
+        private boolean hasColumn(SQLiteDatabase db, String table, String column) {
+            try (Cursor cursor = db.rawQuery("PRAGMA table_info(" + table + ")", null)) {
+                while (cursor.moveToNext()) {
+                    if (column.equals(cursor.getString(cursor.getColumnIndexOrThrow("name")))) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
     }
 }
